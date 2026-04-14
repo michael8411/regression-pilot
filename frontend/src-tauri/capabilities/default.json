@@ -1,0 +1,13 @@
+{
+  "identifier": "default",
+  "description": "Default desktop capability for main window controls.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close"
+  ]
+}

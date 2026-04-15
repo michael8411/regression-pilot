@@ -8,19 +8,26 @@ from api.config_routes import router as config_router
 from api.health_routes import router as health_router
 from api.jira_routes import router as jira_router
 from api.zephyr_routes import router as zephyr_router
+from config.logging_config import setup_logging
 from config.settings import get_settings
+import structlog
+
+setup_logging()
+logger = structlog.get_logger("regression-pilot.backend")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
     configured = bool(settings.jira_base_url and settings.jira_email and settings.jira_api_token)
-    print("Regression Pilot backend starting...")
-    print(f"  Jira configured: {configured}")
-    print(f"  Gemini configured: {bool(settings.gemini_api_key)}")
-    print(f"  Zephyr configured: {bool(settings.zephyr_api_token)}")
+    logger.info(
+        "backend_starting",
+        jira_configured=configured,
+        gemini_configured=bool(settings.gemini_api_key),
+        zephyr_configured=bool(settings.zephyr_api_token),
+    )
     yield
-    print("Shutting down...")
+    logger.info("backend_stopping")
 
 
 app = FastAPI(

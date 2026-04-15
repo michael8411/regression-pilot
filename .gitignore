@@ -3,6 +3,7 @@ backend/.env
 backend/.env.*
 !backend/.env.example
 backend/preferences.json
+backend/logs/
 backend/__pycache__/
 backend/.venv/
 *.pyc

@@ -1,13 +1,27 @@
 # Backend
 backend/.env
+backend/.env.*
+!backend/.env.example
+backend/preferences.json
 backend/__pycache__/
 backend/.venv/
 *.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
 
 # Frontend
 frontend/node_modules/
 frontend/dist/
 frontend/src-tauri/target/
+frontend/src-tauri/gen/
+frontend/src-tauri/.cargo/
+*.tsbuildinfo
 
 # IDE
 .vscode/
@@ -18,3 +32,6 @@ frontend/src-tauri/target/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local tooling/worktrees
+.claude/

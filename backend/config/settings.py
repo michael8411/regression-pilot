@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings
 
@@ -18,7 +19,14 @@ class Settings(BaseSettings):
     app_env: str = "development"
     log_to_file: bool = False
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    @property
+    def jira_configured(self) -> bool:
+        return bool(self.jira_base_url and self.jira_email and self.jira_api_token)
+
+    model_config = {
+        "env_file": str(Path(__file__).resolve().parent.parent / ".env"),
+        "env_file_encoding": "utf-8",
+    }
 
 
 @lru_cache()

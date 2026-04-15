@@ -3,7 +3,10 @@ from typing import Any
 
 import httpx
 
-from config.settings import get_settings
+try:
+    from backend.config.settings import get_settings
+except ImportError:  # pragma: no cover - supports running from backend/ as script
+    from config.settings import get_settings
 
 REQUEST_DELAY_SECONDS = 1.5
 
@@ -197,22 +200,36 @@ async def get_tickets_by_version(fix_version: str) -> list[dict]:
 
 
 async def get_tickets_by_keys(ticket_keys: list[str]) -> list[dict]:
+    if not ticket_keys:
+        return []
+
     keys_str = ", ".join(ticket_keys)
     jql = f"key in ({keys_str})"
 
     async with await _client() as client:
-        resp = await client.get(
-            f"{_base_url()}/rest/api/3/search/jql",
-            params={
-                "jql": jql,
-                "startAt": 0,
-                "maxResults": 50,
-                "fields": ",".join(FIELDS),
-            },
-        )
-        resp.raise_for_status()
-        data = resp.json()
+        all_issues: list[dict] = []
+        start_at = 0
+        max_results = 50
 
-        tickets = [_extract_ticket(issue) for issue in data["issues"]]
+        while True:
+            resp = await client.get(
+                f"{_base_url()}/rest/api/3/search/jql",
+                params={
+                    "jql": jql,
+                    "startAt": start_at,
+                    "maxResults": max_results,
+                    "fields": ",".join(FIELDS),
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+            all_issues.extend(data.get("issues", []))
+            total = data.get("total", len(all_issues))
+            if len(all_issues) >= total:
+                break
+            start_at += max_results
+
+        tickets = [_extract_ticket(issue) for issue in all_issues]
         tickets.sort(key=lambda t: int(t["key"].split("-")[-1]))
         return tickets

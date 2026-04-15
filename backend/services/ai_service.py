@@ -5,7 +5,10 @@ from typing import AsyncIterator
 from google import genai
 from google.genai import types
 
-from config.settings import get_settings
+try:
+    from backend.config.settings import get_settings
+except ImportError:  # pragma: no cover - supports running from backend/ as script
+    from config.settings import get_settings
 
 MODEL = "gemini-2.5-flash"
 

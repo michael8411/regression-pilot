@@ -4,24 +4,38 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.ai_routes import router as ai_router
-from api.config_routes import router as config_router
-from api.health_routes import router as health_router
-from api.jira_routes import router as jira_router
-from api.zephyr_routes import router as zephyr_router
-from config.logging_config import setup_logging
-from config.settings import get_settings
 import structlog
+
+try:
+    from backend.api.ai_routes import router as ai_router
+    from backend.api.config_routes import router as config_router
+    from backend.api.health_routes import router as health_router
+    from backend.api.jira_routes import router as jira_router
+    from backend.api.zephyr_routes import router as zephyr_router
+    from backend.config.logging_config import setup_logging
+    from backend.config.settings import get_settings
+except ImportError:  # pragma: no cover - supports running from backend/ as script
+    from api.ai_routes import router as ai_router
+    from api.config_routes import router as config_router
+    from api.health_routes import router as health_router
+    from api.jira_routes import router as jira_router
+    from api.zephyr_routes import router as zephyr_router
+    from config.logging_config import setup_logging
+    from config.settings import get_settings
 
 settings = get_settings()
 is_dev = settings.app_env.lower() in {"dev", "development", "local"}
-setup_logging(log_level=settings.log_level, enable_file_logging=settings.log_to_file and not is_dev)
+setup_logging(
+    log_level=settings.log_level,
+    enable_file_logging=settings.log_to_file and not is_dev,
+    quiet_external_loggers=is_dev,
+)
 logger = structlog.get_logger("regression-pilot.backend")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    configured = bool(settings.jira_base_url and settings.jira_email and settings.jira_api_token)
+    configured = settings.jira_configured
     logger.info(
         "backend_starting",
         jira_configured=configured,
@@ -57,8 +71,9 @@ if __name__ == "__main__":
     import uvicorn
 
     backend_dir = Path(__file__).resolve().parent
+    app_target = "backend.main:app" if __package__ else "main:app"
     uvicorn.run(
-        "main:app",
+        app_target,
         host="127.0.0.1",
         port=settings.backend_port,
         reload=is_dev,

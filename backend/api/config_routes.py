@@ -1,6 +1,9 @@
 from fastapi import APIRouter
 
-from config.settings import get_settings
+try:
+    from backend.config.settings import get_settings
+except ImportError:  # pragma: no cover - supports running from backend/ as script
+    from config.settings import get_settings
 
 router = APIRouter(prefix="/config", tags=["config"])
 
@@ -10,7 +13,7 @@ async def config_status():
     settings = get_settings()
     return {
         "jira": {
-            "configured": bool(settings.jira_base_url and settings.jira_api_token),
+            "configured": settings.jira_configured,
             "base_url": settings.jira_base_url or None,
             "email": settings.jira_email or None,
         },

@@ -9,7 +9,12 @@ LOGS_DIR = Path(__file__).resolve().parent.parent / "logs"
 LOG_FILE = LOGS_DIR / "app.log"
 
 
-def setup_logging(log_level: str = "info", *, enable_file_logging: bool = True) -> None:
+def setup_logging(
+    log_level: str = "info",
+    *,
+    enable_file_logging: bool = True,
+    quiet_external_loggers: bool = False,
+) -> None:
     level = getattr(logging, log_level.upper(), logging.INFO)
 
     timestamper = structlog.processors.TimeStamper(fmt="iso")
@@ -39,10 +44,11 @@ def setup_logging(log_level: str = "info", *, enable_file_logging: bool = True) 
         force=True,
     )
 
-    # Keep noisy reload/watch and HTTP access logs out of normal app logs.
-    logging.getLogger("watchfiles").setLevel(logging.WARNING)
-    logging.getLogger("watchfiles.main").setLevel(logging.WARNING)
-    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    # In dev reload mode, suppress noisy watcher/access logs.
+    if quiet_external_loggers:
+        logging.getLogger("watchfiles").setLevel(logging.WARNING)
+        logging.getLogger("watchfiles.main").setLevel(logging.WARNING)
+        logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
     structlog.configure(
         processors=shared_processors

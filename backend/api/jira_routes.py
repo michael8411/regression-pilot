@@ -1,8 +1,13 @@
 from fastapi import APIRouter
 
-from schemas.request_models import TicketKeysRequest
-from services import jira_service
-from utils.http_errors import upstream_error
+try:
+    from backend.schemas.request_models import TicketKeysRequest
+    from backend.services import jira_service
+    from backend.utils.http_errors import upstream_error
+except ImportError:  # pragma: no cover - supports running from backend/ as script
+    from schemas.request_models import TicketKeysRequest
+    from services import jira_service
+    from utils.http_errors import upstream_error
 
 router = APIRouter(prefix="/jira", tags=["jira"])
 

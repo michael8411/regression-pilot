@@ -2,7 +2,16 @@ from typing import Any
 
 import httpx
 
-from config.settings import get_settings
+try:
+    from backend.config.settings import get_settings
+except ImportError:  # pragma: no cover - supports running from backend/ as script
+    from config.settings import get_settings
+
+
+class ZephyrStepUploadError(Exception):
+    def __init__(self, message: str, *, created_test_case: dict):
+        super().__init__(message)
+        self.created_test_case = created_test_case
 
 
 def _base_url() -> str:
@@ -48,7 +57,14 @@ async def create_test_case(
         test_case = resp.json()
 
         if steps and test_case.get("key"):
-            await _add_test_steps(client, test_case["key"], steps)
+            try:
+                await _add_test_steps(client, test_case["key"], steps)
+            except Exception as exc:
+                key = test_case.get("key", "unknown")
+                raise ZephyrStepUploadError(
+                    f"Created test case {key}, but failed to upload steps: {exc}",
+                    created_test_case=test_case,
+                ) from exc
 
         return test_case
 
@@ -86,8 +102,9 @@ async def create_test_cases_bulk(
     project_key: str,
     test_cases: list[dict],
     folder_id: int | None = None,
-) -> list[dict]:
-    results = []
+) -> dict[str, list[dict]]:
+    created: list[dict] = []
+    failed: list[dict] = []
     for tc in test_cases:
         preconditions = ""
         if tc.get("preconditions"):
@@ -103,19 +120,31 @@ async def create_test_cases_bulk(
             "Low": "Low",
         }
 
-        result = await create_test_case(
-            project_key=project_key,
-            name=tc.get("name", "Untitled Test Case"),
-            objective=tc.get("objective", ""),
-            preconditions=preconditions,
-            priority=priority_map.get(tc.get("priority", "Medium"), "Normal"),
-            labels=tc.get("labels", []),
-            steps=tc.get("steps", []),
-            folder_id=folder_id,
-        )
-        results.append(result)
+        name = tc.get("name", "Untitled Test Case")
+        try:
+            result = await create_test_case(
+                project_key=project_key,
+                name=name,
+                objective=tc.get("objective", ""),
+                preconditions=preconditions,
+                priority=priority_map.get(tc.get("priority", "Medium"), "Normal"),
+                labels=tc.get("labels", []),
+                steps=tc.get("steps", []),
+                folder_id=folder_id,
+            )
+            created.append(result)
+        except ZephyrStepUploadError as exc:
+            failed.append(
+                {
+                    "name": name,
+                    "error": str(exc),
+                    "created_test_case": exc.created_test_case,
+                }
+            )
+        except Exception as exc:
+            failed.append({"name": name, "error": str(exc)})
 
-    return results
+    return {"created": created, "failed": failed}
 
 
 async def get_folders(project_key: str) -> list[dict]:

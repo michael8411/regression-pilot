@@ -3,9 +3,14 @@ import json
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
-from schemas.request_models import ChatRequest, GenerateRequest, GroupTicketsRequest
-from services import ai_service
-from utils.http_errors import upstream_error
+try:
+    from backend.schemas.request_models import ChatRequest, GenerateRequest, GroupTicketsRequest
+    from backend.services import ai_service
+    from backend.utils.http_errors import upstream_error
+except ImportError:  # pragma: no cover - supports running from backend/ as script
+    from schemas.request_models import ChatRequest, GenerateRequest, GroupTicketsRequest
+    from services import ai_service
+    from utils.http_errors import upstream_error
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 

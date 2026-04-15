@@ -15,6 +15,8 @@ class Settings(BaseSettings):
 
     backend_port: int = 8000
     log_level: str = "info"
+    app_env: str = "development"
+    log_to_file: bool = False
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

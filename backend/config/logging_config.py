@@ -9,8 +9,7 @@ LOGS_DIR = Path(__file__).resolve().parent.parent / "logs"
 LOG_FILE = LOGS_DIR / "app.log"
 
 
-def setup_logging(log_level: str = "info") -> None:
-    LOGS_DIR.mkdir(parents=True, exist_ok=True)
+def setup_logging(log_level: str = "info", *, enable_file_logging: bool = True) -> None:
     level = getattr(logging, log_level.upper(), logging.INFO)
 
     timestamper = structlog.processors.TimeStamper(fmt="iso")
@@ -21,19 +20,29 @@ def setup_logging(log_level: str = "info") -> None:
         timestamper,
     ]
 
-    logging.basicConfig(
-        level=level,
-        format="%(message)s",
-        handlers=[
-            logging.StreamHandler(sys.stdout),
+    handlers: list[logging.Handler] = [logging.StreamHandler(sys.stdout)]
+    if enable_file_logging:
+        LOGS_DIR.mkdir(parents=True, exist_ok=True)
+        handlers.append(
             logging.handlers.RotatingFileHandler(
                 LOG_FILE,
                 maxBytes=5 * 1024 * 1024,
                 backupCount=5,
                 encoding="utf-8",
-            ),
-        ],
+            )
+        )
+
+    logging.basicConfig(
+        level=level,
+        format="%(message)s",
+        handlers=handlers,
+        force=True,
     )
+
+    # Keep noisy reload/watch and HTTP access logs out of normal app logs.
+    logging.getLogger("watchfiles").setLevel(logging.WARNING)
+    logging.getLogger("watchfiles.main").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
     structlog.configure(
         processors=shared_processors

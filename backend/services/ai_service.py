@@ -1,12 +1,3 @@
-"""AI service for generating Zephyr Scale test cases using Google Gemini.
-
-Uses the official google-genai SDK (GA as of May 2025).
-Key Gemini features leveraged:
-  - Structured JSON output via response_json_schema (guaranteed valid JSON)
-  - Streaming via generate_content_stream for real-time chat
-  - gemini-2.5-flash for fast, high-quality generation
-"""
-
 import json
 import re
 from typing import AsyncIterator
@@ -132,17 +123,10 @@ GROUP_TICKETS_SCHEMA = {
 
 
 def _get_client() -> genai.Client:
-    """Create a Gemini client with the configured API key."""
     return genai.Client(api_key=get_settings().gemini_api_key)
 
 
 async def generate_test_cases(tickets: list[dict], user_message: str = "") -> dict:
-    """
-    Generate test cases for a batch of tickets using Gemini's structured output.
-
-    Gemini's native JSON schema enforcement guarantees valid JSON — no parsing
-    hacks or retry loops needed.
-    """
     client = _get_client()
     ticket_context = json.dumps(tickets, indent=2, default=str)
 
@@ -169,16 +153,8 @@ test cases for Zephyr Scale.
 
     return json.loads(response.text)
 
-async def group_tickets_semantic(tickets: list[dict]) -> dict:
-    """
-    Group tickets into a constrained number of useful regression themes.
 
-    Strategy:
-    1) Ask Gemini to cluster tickets semantically with confidence scores.
-    2) Enforce practical constraints (3-6 groups max, reasonable names).
-    3) Route low-confidence items to "Needs Review".
-    4) Fallback to local keyword grouping if model output is invalid.
-    """
+async def group_tickets_semantic(tickets: list[dict]) -> dict:
     if not tickets:
         return {"groups": []}
 
@@ -247,10 +223,6 @@ async def chat_message(
     messages: list[dict],
     tickets: list[dict] | None = None,
 ) -> str:
-    """
-    Send a chat message with optional ticket context.
-    Used for the interactive AI chat panel (non-streaming).
-    """
     client = _get_client()
 
     system = SYSTEM_INSTRUCTION
@@ -287,10 +259,6 @@ async def stream_chat_message(
     messages: list[dict],
     tickets: list[dict] | None = None,
 ) -> AsyncIterator[str]:
-    """
-    Stream a chat response for real-time display.
-    Yields text chunks as they arrive from Gemini.
-    """
     client = _get_client()
 
     system = SYSTEM_INSTRUCTION
@@ -324,10 +292,6 @@ async def stream_chat_message(
 
 
 def _build_contents(messages: list[dict]) -> list[types.Content]:
-    """
-    Convert chat message dicts to Gemini Content objects.
-    Maps 'user' -> 'user' and 'assistant' -> 'model'.
-    """
     contents = []
     for msg in messages:
         role = "model" if msg["role"] == "assistant" else "user"
@@ -341,7 +305,6 @@ def _build_contents(messages: list[dict]) -> list[types.Content]:
 
 
 def _normalize_grouping_payload(payload: dict, all_keys: list[str]) -> dict:
-    """Ensure model output is deterministic and safe for UI rendering."""
     key_set = set(all_keys)
     assigned: set[str] = set()
     groups_out: list[dict] = []
@@ -368,12 +331,10 @@ def _normalize_grouping_payload(payload: dict, all_keys: list[str]) -> dict:
     ]
     assigned.update(needs_review)
 
-    # If the model misses a key, keep it visible by sending it to Needs Review.
     for k in all_keys:
         if k not in assigned:
             needs_review.append(k)
 
-    # Keep the number of groups manageable in the UI.
     groups_out.sort(key=lambda g: len(g["ticket_keys"]), reverse=True)
     if len(groups_out) > 6:
         overflow = groups_out[6:]
@@ -394,7 +355,6 @@ def _normalize_grouping_payload(payload: dict, all_keys: list[str]) -> dict:
 
 
 def _fallback_group_tickets(tickets: list[dict]) -> dict:
-    """Heuristic fallback used when AI grouping fails."""
     buckets: dict[str, list[str]] = {
         "Sync & Data Flow": [],
         "Work Orders": [],

@@ -1,16 +1,10 @@
-"""Jira REST API v3 service layer.
-
-Uses the NEW /rest/api/3/search/jql endpoint (old /search was removed).
-Conservative rate limiting to avoid org alerts.
-"""
-
-import httpx
 import asyncio
 from typing import Any
 
+import httpx
+
 from config import get_settings
 
-# Small pause between paginated requests so we do not hammer Jira.
 REQUEST_DELAY_SECONDS = 1.5
 
 
@@ -24,7 +18,6 @@ def _base_url() -> str:
 
 
 async def _client() -> httpx.AsyncClient:
-    """Create an async HTTP client with Jira auth."""
     email, token = _get_auth()
     return httpx.AsyncClient(
         auth=(email, token),
@@ -34,7 +27,6 @@ async def _client() -> httpx.AsyncClient:
 
 
 async def get_projects() -> list[dict]:
-    """Fetch all Jira projects the authenticated user can see."""
     async with await _client() as client:
         resp = await client.get(f"{_base_url()}/rest/api/3/project")
         resp.raise_for_status()
@@ -57,7 +49,6 @@ async def get_versions(
     order_by: str = "-releaseDate",
     max_results: int = 50,
 ) -> list[dict]:
-    """Fetch fix versions for a project."""
     async with await _client() as client:
         params: dict[str, Any] = {
             "maxResults": max_results,
@@ -109,7 +100,6 @@ FIELDS = [
 
 
 def _extract_adf_text(adf: Any) -> str:
-    """Recursively extract plain text from Atlassian Document Format."""
     if isinstance(adf, str):
         return adf
     if not isinstance(adf, dict):
@@ -123,7 +113,6 @@ def _extract_adf_text(adf: Any) -> str:
 
 
 def _extract_ticket(issue: dict) -> dict:
-    """Transform raw Jira issue into clean ticket dict."""
     fields = issue["fields"]
 
     comments = []
@@ -132,11 +121,13 @@ def _extract_ticket(issue: dict) -> dict:
         body = c.get("body", "")
         if isinstance(body, dict):
             body = _extract_adf_text(body)
-        comments.append({
-            "author": c.get("author", {}).get("displayName", "Unknown"),
-            "created": c.get("created", ""),
-            "body": body,
-        })
+        comments.append(
+            {
+                "author": c.get("author", {}).get("displayName", "Unknown"),
+                "created": c.get("created", ""),
+                "body": body,
+            }
+        )
 
     desc_raw = fields.get("description", "") or ""
     description = _extract_adf_text(desc_raw) if isinstance(desc_raw, dict) else str(desc_raw)
@@ -162,7 +153,6 @@ def _extract_ticket(issue: dict) -> dict:
 
 
 async def get_tickets_by_version(fix_version: str) -> list[dict]:
-    """Fetch all tickets tagged with a specific fix version via JQL."""
     jql = f'fixVersion = "{fix_version}"'
 
     async with await _client() as client:
@@ -187,7 +177,6 @@ async def get_tickets_by_version(fix_version: str) -> list[dict]:
             request_count += 1
 
             if resp.status_code == 429:
-                # Jira can return Retry-After; use it when present.
                 retry_after = int(resp.headers.get("Retry-After", 60))
                 await asyncio.sleep(retry_after)
                 continue
@@ -208,7 +197,6 @@ async def get_tickets_by_version(fix_version: str) -> list[dict]:
 
 
 async def get_tickets_by_keys(ticket_keys: list[str]) -> list[dict]:
-    """Fetch specific tickets by their keys."""
     keys_str = ", ".join(ticket_keys)
     jql = f"key in ({keys_str})"
 

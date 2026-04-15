@@ -1,11 +1,6 @@
-"""Zephyr Scale API service for creating test cases in Jira.
-
-Zephyr Scale Cloud REST API v2.
-Docs: https://support.smartbear.com/zephyr-scale-cloud/api-docs/
-"""
+from typing import Any
 
 import httpx
-from typing import Any
 
 from config import get_settings
 
@@ -32,19 +27,6 @@ async def create_test_case(
     steps: list[dict] | None = None,
     folder_id: int | None = None,
 ) -> dict:
-    """
-    Create a single test case in Zephyr Scale.
-
-    Args:
-        project_key: Jira project key (e.g., "FM")
-        name: Test case name
-        objective: What this test validates
-        preconditions: Setup requirements (rendered as HTML)
-        priority: Normal, High, Low, Critical
-        labels: Tags for the test case
-        steps: List of {"action": "...", "expected_result": "..."} dicts
-        folder_id: Optional folder ID to organize test cases
-    """
     payload: dict[str, Any] = {
         "projectKey": project_key,
         "name": name,
@@ -76,16 +58,17 @@ async def _add_test_steps(
     test_case_key: str,
     steps: list[dict],
 ) -> None:
-    """Add test steps to an existing test case."""
     step_items = []
-    for i, step in enumerate(steps):
-        step_items.append({
-            "inline": {
-                "description": step.get("action", ""),
-                "testData": step.get("test_data", ""),
-                "expectedResult": step.get("expected_result", ""),
+    for step in steps:
+        step_items.append(
+            {
+                "inline": {
+                    "description": step.get("action", ""),
+                    "testData": step.get("test_data", ""),
+                    "expectedResult": step.get("expected_result", ""),
+                }
             }
-        })
+        )
 
     payload = {
         "mode": "OVERWRITE",
@@ -104,22 +87,12 @@ async def create_test_cases_bulk(
     test_cases: list[dict],
     folder_id: int | None = None,
 ) -> list[dict]:
-    """
-    Create multiple test cases from AI-generated output.
-
-    Args:
-        project_key: Jira project key
-        test_cases: List of test case dicts from AI service
-        folder_id: Optional folder for organization
-    """
     results = []
     for tc in test_cases:
         preconditions = ""
         if tc.get("preconditions"):
             if isinstance(tc["preconditions"], list):
-                preconditions = "<ul>" + "".join(
-                    f"<li>{p}</li>" for p in tc["preconditions"]
-                ) + "</ul>"
+                preconditions = "<ul>" + "".join(f"<li>{p}</li>" for p in tc["preconditions"]) + "</ul>"
             else:
                 preconditions = str(tc["preconditions"])
 
@@ -146,7 +119,6 @@ async def create_test_cases_bulk(
 
 
 async def get_folders(project_key: str) -> list[dict]:
-    """Get test case folders for a project."""
     async with httpx.AsyncClient(headers=_headers(), timeout=30.0) as client:
         resp = await client.get(
             f"{_base_url()}/folders",

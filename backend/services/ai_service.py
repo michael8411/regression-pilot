@@ -5,7 +5,7 @@ from typing import AsyncIterator
 from google import genai
 from google.genai import types
 
-from config import get_settings
+from config.settings import get_settings
 
 MODEL = "gemini-2.5-flash"
 

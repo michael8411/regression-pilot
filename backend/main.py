@@ -8,7 +8,7 @@ from api.config_routes import router as config_router
 from api.health_routes import router as health_router
 from api.jira_routes import router as jira_router
 from api.zephyr_routes import router as zephyr_router
-from config import get_settings
+from config.settings import get_settings
 
 
 @asynccontextmanager

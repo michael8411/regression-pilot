@@ -1,11 +1,10 @@
-"""Application configuration loaded from environment variables."""
+from functools import lru_cache
 
 from pydantic_settings import BaseSettings
-from functools import lru_cache
 
 
 class Settings(BaseSettings):
-    jira_base_url: str = ""
+    jira_base_url: str = "https://hcssdev.atlassian.net/"
     jira_email: str = ""
     jira_api_token: str = ""
 

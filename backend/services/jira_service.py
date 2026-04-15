@@ -3,7 +3,7 @@ from typing import Any
 
 import httpx
 
-from config import get_settings
+from config.settings import get_settings
 
 REQUEST_DELAY_SECONDS = 1.5
 

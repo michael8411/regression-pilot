@@ -30,7 +30,7 @@ setup_logging(
     enable_file_logging=settings.log_to_file and not is_dev,
     quiet_external_loggers=is_dev,
 )
-logger = structlog.get_logger("regression-pilot.backend")
+logger = structlog.get_logger("testdeck.backend")
 
 
 @asynccontextmanager
@@ -47,7 +47,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Regression Pilot",
+    title="Testdeck",
     version="0.1.0",
     lifespan=lifespan,
 )

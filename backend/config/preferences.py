@@ -2,7 +2,6 @@ import copy
 import json
 from pathlib import Path
 
-
 DEFAULT_PREFERENCES = {
     "theme": "dark",
     "project_scope": [],
@@ -28,3 +27,11 @@ def read_preferences(path: Path = PREFERENCES_PATH) -> dict:
     except (OSError, json.JSONDecodeError, TypeError):
         pass
     return defaults
+
+
+def write_preferences(updates: dict, path: Path = PREFERENCES_PATH) -> dict:
+    current = read_preferences(path)
+    current.update({k: v for k, v in updates.items() if v is not None})
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(current, indent=2, ensure_ascii=False), encoding="utf-8")
+    return current

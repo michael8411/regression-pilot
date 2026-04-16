@@ -7,10 +7,10 @@ from google.genai import types
 
 try:
     from backend.config.settings import get_settings
+    from backend.config.preferences import read_preferences
 except ImportError:  # pragma: no cover - supports running from backend/ as script
     from config.settings import get_settings
-
-MODEL = "gemini-2.5-flash"
+    from config.preferences import read_preferences
 
 SYSTEM_INSTRUCTION = """You are a senior QA engineer specializing in regression testing for mobile 
 construction management software (HCSS E360 / Fleet Mobile / Mechanic Mobile).
@@ -131,9 +131,10 @@ def _get_client() -> genai.Client:
 
 async def generate_test_cases(tickets: list[dict], user_message: str = "") -> dict:
     client = _get_client()
+    prefs = read_preferences()
     ticket_context = json.dumps(tickets, indent=2, default=str)
 
-    prompt = f"""Analyze the following Jira tickets and generate comprehensive regression 
+    prompt = f"""Analyze the following Jira tickets and generate comprehensive regression
 test cases for Zephyr Scale.
 
 ## Tickets
@@ -143,12 +144,12 @@ test cases for Zephyr Scale.
 {user_message if user_message else "Generate standard regression test cases for all tickets."}"""
 
     response = await client.aio.models.generate_content(
-        model=MODEL,
+        model=prefs["ai_model"],
         contents=prompt,
         config=types.GenerateContentConfig(
             system_instruction=SYSTEM_INSTRUCTION,
             max_output_tokens=16384,
-            temperature=0.3,
+            temperature=prefs["ai_temperature"],
             response_mime_type="application/json",
             response_schema=TEST_CASES_SCHEMA,
         ),
@@ -200,9 +201,10 @@ Tickets JSON:
 """
 
     client = _get_client()
+    prefs = read_preferences()
     try:
         response = await client.aio.models.generate_content(
-            model=MODEL,
+            model=prefs["ai_model"],
             contents=prompt,
             config=types.GenerateContentConfig(
                 system_instruction=(
@@ -227,6 +229,7 @@ async def chat_message(
     tickets: list[dict] | None = None,
 ) -> str:
     client = _get_client()
+    prefs = read_preferences()
 
     system = SYSTEM_INSTRUCTION
     if tickets:
@@ -246,12 +249,12 @@ async def chat_message(
     contents = _build_contents(messages)
 
     response = await client.aio.models.generate_content(
-        model=MODEL,
+        model=prefs["ai_model"],
         contents=contents,
         config=types.GenerateContentConfig(
             system_instruction=system,
             max_output_tokens=4096,
-            temperature=0.5,
+            temperature=prefs["ai_temperature"],
         ),
     )
 
@@ -263,6 +266,7 @@ async def stream_chat_message(
     tickets: list[dict] | None = None,
 ) -> AsyncIterator[str]:
     client = _get_client()
+    prefs = read_preferences()
 
     system = SYSTEM_INSTRUCTION
     if tickets:
@@ -282,12 +286,12 @@ async def stream_chat_message(
     contents = _build_contents(messages)
 
     async for chunk in await client.aio.models.generate_content_stream(
-        model=MODEL,
+        model=prefs["ai_model"],
         contents=contents,
         config=types.GenerateContentConfig(
             system_instruction=system,
             max_output_tokens=4096,
-            temperature=0.5,
+            temperature=prefs["ai_temperature"],
         ),
     ):
         if chunk.text:

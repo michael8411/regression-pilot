@@ -1,3 +1,3 @@
 fn main() {
-    regression_pilot_lib::run();
+    testdeck_lib::run();
 }

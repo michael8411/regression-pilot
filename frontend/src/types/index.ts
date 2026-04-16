@@ -100,4 +100,34 @@ export interface ZephyrFolder {
 export interface PushResult {
   created: number;
   test_cases: any[];
+  partial_failure?: boolean;
+  failed_count?: number;
+  failed?: { name: string; error: string }[];
+}
+
+export interface Preferences {
+  theme: "dark" | "light" | "system";
+  project_scope: string[];
+  default_version_status: "unreleased" | "released" | "all";
+  auto_select_tickets: boolean;
+  default_zephyr_folder: number | null;
+  ai_model: string;
+  ai_temperature: number;
+  export_format: "json" | "csv" | "markdown";
+}
+
+export interface TestConnectionResult {
+  ok: boolean;
+  error?: string;
+  display_name?: string;
+  email?: string;
+  model?: string;
+}
+
+export interface CredentialsPayload {
+  jira_base_url?: string;
+  jira_email?: string;
+  jira_api_token?: string;
+  gemini_api_key?: string;
+  zephyr_api_token?: string;
 }

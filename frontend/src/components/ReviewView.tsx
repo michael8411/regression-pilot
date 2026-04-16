@@ -20,10 +20,17 @@ interface ReviewViewProps {
   onUpdateTestCases: (cases: TestCase[]) => void;
 }
 
-export function ReviewView({ testCases, projectKey, onBack, onUpdateTestCases }: ReviewViewProps) {
+export function ReviewView({
+  testCases,
+  projectKey,
+  onBack,
+  onUpdateTestCases,
+}: ReviewViewProps) {
   const [expandedIndex, setExpandedIndex] = useState<number | null>(0);
   const [pushing, setPushing] = useState(false);
-  const [pushResult, setPushResult] = useState<{ created: number } | null>(null);
+  const [pushResult, setPushResult] = useState<{ created: number } | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
 
   const handlePush = async () => {
@@ -46,20 +53,27 @@ export function ReviewView({ testCases, projectKey, onBack, onUpdateTestCases }:
   };
 
   return (
-    <div className="flex-1 flex flex-col p-6 gap-5 overflow-hidden animate-fade">
+    <div className="flex overflow-hidden flex-col flex-1 gap-5 p-6 animate-fade">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-ok/10 flex items-center justify-center">
+      <div className="flex justify-between items-center">
+        <div className="flex gap-3 items-center">
+          <div className="flex justify-center items-center w-9 h-9 rounded-lg bg-ok/10">
             <ClipboardCheck size={18} className="text-ok" />
           </div>
           <div>
-            <h2 className="text-base font-semibold text-ink">Review Test Cases</h2>
-            <p className="text-xs text-ink-muted">{testCases.length} test cases generated — review before pushing</p>
+            <h2 className="text-base font-semibold text-ink">
+              Review Test Cases
+            </h2>
+            <p className="text-xs text-ink-muted">
+              {testCases.length} test cases generated — review before pushing
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={onBack} className="g-btn flex items-center gap-2 text-xs">
+        <div className="flex gap-2 items-center">
+          <button
+            onClick={onBack}
+            className="flex gap-2 items-center text-xs g-btn"
+          >
             <ArrowLeft size={13} />
             Back
           </button>
@@ -67,7 +81,7 @@ export function ReviewView({ testCases, projectKey, onBack, onUpdateTestCases }:
             <button
               onClick={handlePush}
               disabled={pushing || testCases.length === 0}
-              className="g-btn-solid flex items-center gap-2 px-5 disabled:opacity-50"
+              className="flex gap-2 items-center px-5 g-btn-solid disabled:opacity-50"
             >
               {pushing ? (
                 <>
@@ -87,31 +101,40 @@ export function ReviewView({ testCases, projectKey, onBack, onUpdateTestCases }:
 
       {/* Success Banner */}
       {pushResult && (
-        <div className="p-4 rounded-xl bg-ok/10 border border-success/20 flex items-center gap-3 animate-in">
-          <div className="w-8 h-8 rounded-full bg-ok/20 flex items-center justify-center">
+        <div className="p-4 rounded-[10px] bg-ok/10 border border-ok/20 flex items-center gap-3 animate-in">
+          <div className="flex justify-center items-center w-8 h-8 rounded-full bg-ok/20">
             <Check size={16} className="text-ok" />
           </div>
           <div>
             <p className="text-sm font-medium text-ok">
-              Successfully pushed {pushResult.created} test cases to Zephyr Scale
+              Successfully pushed {pushResult.created} test cases to Zephyr
+              Scale
             </p>
-            <p className="text-xs text-ok/60 mt-0.5">Check your Jira project to see them</p>
+            <p className="text-xs text-ok/60 mt-0.5">
+              Check your Jira project to see them
+            </p>
           </div>
         </div>
       )}
 
       {error && (
-        <div className="p-3 rounded-xl bg-err/10 border border-danger/20 text-sm text-err/90">{error}</div>
+        <div className="p-3 rounded-[10px] bg-err/10 border border-err/20 text-sm text-err/90">
+          {error}
+        </div>
       )}
 
       {/* Test Case Accordion */}
-      <div className="flex-1 overflow-y-auto space-y-2">
+      <div className="overflow-y-auto flex-1 space-y-2">
         {testCases.map((tc, i) => (
-          <div key={i} className="glass overflow-hidden animate-in" style={{ animationDelay: `${i * 40}ms` }}>
+          <div
+            key={i}
+            className="overflow-hidden surface animate-in"
+            style={{ animationDelay: `${i * 40}ms` }}
+          >
             {/* Header Row */}
             <div
               onClick={() => setExpandedIndex(expandedIndex === i ? null : i)}
-              className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-white/[0.02] transition-colors"
+              className="flex gap-3 items-center px-4 py-3 transition-colors cursor-pointer hover:bg-surface-overlay"
             >
               {expandedIndex === i ? (
                 <ChevronDown size={14} className="text-ink-muted shrink-0" />
@@ -121,45 +144,63 @@ export function ReviewView({ testCases, projectKey, onBack, onUpdateTestCases }:
 
               <span
                 className={clsx(
-                  "text-[10px] font-semibold px-2 py-0.5 rounded shrink-0",
-                  tc.priority === "Critical" && "bg-err/15 text-err",
-                  tc.priority === "High" && "bg-warn/15 text-warn",
-                  tc.priority === "Medium" && "bg-accent/15 text-accent-light",
-                  tc.priority === "Low" && "bg-white/5 text-ink-muted"
+                  "text-[10px] font-medium px-2 py-0.5 rounded-md shrink-0 border",
+                  tc.priority === "Critical" &&
+                    "bg-err/10 text-err border-err/20",
+                  tc.priority === "High" &&
+                    "bg-warn/10 text-warn border-warn/20",
+                  tc.priority === "Medium" &&
+                    "bg-accent-dim text-accent-text border-accent/20",
+                  tc.priority === "Low" &&
+                    "bg-surface-overlay text-ink-muted border-subtle",
                 )}
               >
                 {tc.priority}
               </span>
 
-              <span className="text-sm text-white/75 flex-1 truncate">{tc.name}</span>
+              <span className="flex-1 text-sm truncate text-ink-secondary">
+                {tc.name}
+              </span>
 
-              <span className="text-[11px] text-ink-faint">{tc.steps.length} steps</span>
+              <span className="text-[11px] text-ink-muted tabular-nums">
+                {tc.steps.length} steps
+              </span>
 
               <button
-                onClick={(e) => { e.stopPropagation(); handleRemove(i); }}
-                className="p-1 rounded hover:bg-err/10 transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleRemove(i);
+                }}
+                className="p-1 rounded transition-colors hover:bg-err/10"
               >
-                <Trash2 size={13} className="text-ink-faint hover:text-err" />
+                <Trash2 size={13} className="text-ink-muted hover:text-err" />
               </button>
             </div>
 
             {/* Expanded Content */}
             {expandedIndex === i && (
-              <div className="px-4 pb-4 border-t border-white/[0.04] pt-3 space-y-4 animate-fade">
+              <div className="px-4 pb-4 border-t border-subtle pt-3 space-y-4 animate-fade">
                 {/* Objective */}
                 <div>
-                  <h4 className="text-[10px] font-semibold text-ink-muted uppercase tracking-wider mb-1">Objective</h4>
+                  <h4 className="text-[10px] font-medium text-ink-muted uppercase tracking-wider mb-1">
+                    Objective
+                  </h4>
                   <p className="text-sm text-ink-secondary">{tc.objective}</p>
                 </div>
 
                 {/* Preconditions */}
                 {tc.preconditions.length > 0 && (
                   <div>
-                    <h4 className="text-[10px] font-semibold text-ink-muted uppercase tracking-wider mb-1">Preconditions</h4>
+                    <h4 className="text-[10px] font-medium text-ink-muted uppercase tracking-wider mb-1">
+                      Preconditions
+                    </h4>
                     <ul className="space-y-1">
                       {tc.preconditions.map((p, j) => (
-                        <li key={j} className="text-sm text-ink-secondary flex items-start gap-2">
-                          <span className="text-accent/50 mt-1">•</span>
+                        <li
+                          key={j}
+                          className="flex gap-2 items-start text-sm text-ink-secondary"
+                        >
+                          <span className="mt-1 text-accent/50">•</span>
                           {p}
                         </li>
                       ))}
@@ -169,16 +210,23 @@ export function ReviewView({ testCases, projectKey, onBack, onUpdateTestCases }:
 
                 {/* Steps */}
                 <div>
-                  <h4 className="text-[10px] font-semibold text-ink-muted uppercase tracking-wider mb-2">Test Steps</h4>
+                  <h4 className="text-[10px] font-medium text-ink-muted uppercase tracking-wider mb-2">
+                    Test Steps
+                  </h4>
                   <div className="space-y-2">
                     {tc.steps.map((step) => (
-                      <div key={step.step_number} className="flex gap-3 p-2 rounded-lg bg-white/[0.02]">
-                        <span className="text-[11px] font-mono text-accent/50 w-5 shrink-0 text-right mt-0.5">
+                      <div
+                        key={step.step_number}
+                        className="flex gap-3 p-2 rounded-lg bg-surface-input"
+                      >
+                        <span className="text-[11px] font-mono tabular-nums text-accent/50 w-5 shrink-0 text-right mt-0.5">
                           {step.step_number}
                         </span>
                         <div className="flex-1">
-                          <p className="text-sm text-white/65">{step.action}</p>
-                          <p className="text-xs text-ok/60 mt-1">
+                          <p className="text-sm text-ink-secondary">
+                            {step.action}
+                          </p>
+                          <p className="mt-1 text-xs text-ok/60">
                             Expected: {step.expected_result}
                           </p>
                         </div>
@@ -193,7 +241,7 @@ export function ReviewView({ testCases, projectKey, onBack, onUpdateTestCases }:
                     {tc.labels.map((label) => (
                       <span
                         key={label}
-                        className="text-[10px] px-2 py-0.5 rounded-full bg-white/[0.04] text-ink-muted border border-white/[0.06]"
+                        className="text-[10px] px-2 py-0.5 rounded-md bg-surface-overlay text-ink-muted border border-subtle"
                       >
                         {label}
                       </span>

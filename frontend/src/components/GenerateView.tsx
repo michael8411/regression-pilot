@@ -65,7 +65,9 @@ export function GenerateView({
 
   const collisionDetectionStrategy: CollisionDetection = (args) => {
     const pointerCollisions = pointerWithin(args);
-    return pointerCollisions.length > 0 ? pointerCollisions : closestCenter(args);
+    return pointerCollisions.length > 0
+      ? pointerCollisions
+      : closestCenter(args);
   };
 
   const handleGenerate = async () => {
@@ -197,8 +199,8 @@ export function GenerateView({
     <div className="flex overflow-hidden flex-col flex-1 gap-5 p-6 animate-fade">
       <div className="flex justify-between items-center">
         <div className="flex gap-3 items-center">
-          <div className="flex justify-center items-center w-9 h-9 rounded-xl bg-accent/10">
-            <Sparkles size={18} className="text-accent-light" />
+          <div className="flex justify-center items-center w-9 h-9 rounded-lg bg-accent-dim">
+            <Sparkles size={18} className="text-accent-text" />
           </div>
           <div>
             <h2 className="text-base font-semibold text-ink">
@@ -219,7 +221,7 @@ export function GenerateView({
         </button>
       </div>
 
-      <div className="overflow-y-auto overflow-x-hidden flex-1 p-4 min-h-0 glass">
+      <div className="overflow-y-auto overflow-x-hidden flex-1 p-4 min-h-0 surface">
         {groupingLoading && (
           <div className="text-[11px] text-ink-muted mb-3">
             Organizing tickets into regression themes...
@@ -256,7 +258,6 @@ export function GenerateView({
               activeTicketKey={activeTicketKey}
             />
           ))}
-
         </DndContext>
       </div>
 
@@ -273,7 +274,7 @@ export function GenerateView({
       </div>
 
       {error && (
-        <div className="p-3 text-sm rounded-xl border bg-err/10 border-danger/20 text-err/90">
+        <div className="p-3 text-sm rounded-[10px] border bg-err/10 border-err/20 text-err/90">
           {error}
         </div>
       )}
@@ -324,19 +325,19 @@ function GroupDropSection({
   return (
     <div
       ref={setNodeRef}
-      className={`mb-4 last:mb-0 rounded-xl border p-2.5 transition-colors ${
+      className={`mb-4 last:mb-0 rounded-lg border p-2.5 transition-colors ${
         overContainer
-          ? "border-accent/40 bg-accent/[0.08]"
-          : "border-white/[0.05] bg-white/[0.01]"
+          ? "border-accent/40 bg-accent-dim"
+          : "border-subtle bg-surface-input"
       }`}
     >
-      <h3 className="text-[11px] font-semibold text-accent-light/70 uppercase tracking-wider mb-2">
+      <h3 className="text-[11px] font-medium text-accent-text/70 uppercase tracking-wider mb-2">
         {groupName} ({tickets.length})
       </h3>
       <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
         <div className="space-y-1.5">
           {tickets.length === 0 && (
-            <div className="rounded-md border border-dashed border-white/[0.18] px-2 py-2 text-[11px] text-ink-faint">
+            <div className="rounded-md border border-dashed border-muted px-2 py-2 text-[11px] text-ink-muted">
               Drop tickets here
             </div>
           )}
@@ -385,7 +386,7 @@ function SortableTicketRow({
       className={`${showDropLine ? "border-t-2 border-dashed border-accent/70 pt-1.5" : ""}`}
     >
       <div
-        className={`flex items-center gap-2 text-xs rounded px-1.5 py-1.5 bg-white/[0.01] hover:bg-white/[0.03] border border-transparent ${
+        className={`flex items-center gap-2 text-xs rounded-md px-1.5 py-1.5 hover:bg-surface-overlay border border-transparent transition-colors ${
           isDragging ? "opacity-40" : "opacity-100"
         }`}
       >
@@ -393,12 +394,14 @@ function SortableTicketRow({
           type="button"
           {...attributes}
           {...listeners}
-          className="shrink-0 p-0.5 rounded hover:bg-white/[0.08] cursor-grab active:cursor-grabbing"
+          className="shrink-0 p-0.5 rounded hover:bg-surface-overlay cursor-grab active:cursor-grabbing"
           aria-label={`Drag ${ticket.key}`}
         >
-          <GripVertical size={14} className="text-ink-faint" />
+          <GripVertical size={14} className="text-ink-muted" />
         </button>
-        <span className="w-16 font-mono text-ink-muted">{ticket.key}</span>
+        <span className="w-16 font-mono tabular-nums text-ink-muted">
+          {ticket.key}
+        </span>
         <span className="flex-1 truncate text-ink-secondary">
           {ticket.summary}
         </span>

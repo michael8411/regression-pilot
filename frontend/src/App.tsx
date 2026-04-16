@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { SetupView } from "@/components/SetupView";
 import { SelectView } from "@/components/SelectView";
@@ -91,6 +91,25 @@ function TitleBar() {
   const isTauri =
     typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
+  const [isMaximized, setIsMaximized] = useState(false);
+
+  useEffect(() => {
+    if (!isTauri) return;
+
+    const win = getCurrentWindow();
+    const refresh = async () => setIsMaximized(await win.isMaximized());
+
+    refresh();
+
+    const unlistenFocusPromise = win.onFocusChanged(() => refresh());
+    const unlistenResizedPromise = win.onResized(() => refresh());
+
+    return () => {
+      void unlistenFocusPromise.then((unlisten) => unlisten());
+      void unlistenResizedPromise.then((unlisten) => unlisten());
+    };
+  }, [isTauri]);
+
   const minimize = async () => {
     if (!isTauri) return;
     await getCurrentWindow().minimize();
@@ -98,7 +117,9 @@ function TitleBar() {
 
   const toggleMaximize = async () => {
     if (!isTauri) return;
-    await getCurrentWindow().toggleMaximize();
+    const win = getCurrentWindow();
+    await win.toggleMaximize();
+    setIsMaximized(await win.isMaximized());
   };
 
   const close = async () => {
@@ -107,19 +128,19 @@ function TitleBar() {
   };
 
   return (
-    <div className="h-9 shrink-0 border-b border-white/[0.04] flex items-center justify-between">
+    <div className="h-9 shrink-0 border-b border-subtle flex items-center justify-between">
       <div
         data-tauri-drag-region
         className="flex-1 h-full flex items-center px-4 text-[11px] font-medium tracking-wide text-ink-muted select-none"
       >
-        Regression Pilot
+        Testdeck
       </div>
 
       <div className="flex items-center h-full">
         <button
           type="button"
           onClick={minimize}
-          className="flex justify-center items-center w-12 h-full transition-colors text-ink-muted hover:bg-white/10 hover:text-white"
+          className="flex justify-center items-center w-12 h-full transition-colors text-ink-muted hover:bg-surface-overlay hover:text-ink"
         >
           <svg
             width="12"
@@ -136,7 +157,7 @@ function TitleBar() {
         <button
           type="button"
           onClick={toggleMaximize}
-          className="flex justify-center items-center w-12 h-full transition-colors text-ink-muted hover:bg-white/10 hover:text-white"
+          className="flex justify-center items-center w-12 h-full transition-colors text-ink-muted hover:bg-surface-overlay hover:text-ink"
         >
           <svg
             width="12"
@@ -146,15 +167,21 @@ function TitleBar() {
             stroke="currentColor"
             strokeWidth="1"
           >
-            <path d="M4.5 4.5V3a.5.5 0 0 1 .5-.5h4a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-.5.5H7.5" />
-            <rect x="2.5" y="4.5" width="5" height="5" rx="0.5" />
+            {isMaximized ? (
+              <rect x="2.5" y="2.5" width="7" height="7" rx="0.5" />
+            ) : (
+              <>
+                <path d="M4.5 4.5V3a.5.5 0 0 1 .5-.5h4a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-.5.5H7.5" />
+                <rect x="2.5" y="4.5" width="5" height="5" rx="0.5" />
+              </>
+            )}
           </svg>
         </button>
 
         <button
           type="button"
           onClick={close}
-          className="flex justify-center items-center w-12 h-full transition-colors text-ink-muted hover:bg-red-500 hover:text-white"
+          className="flex justify-center items-center w-12 h-full transition-colors text-ink-muted hover:bg-err hover:text-white"
         >
           <svg
             width="12"

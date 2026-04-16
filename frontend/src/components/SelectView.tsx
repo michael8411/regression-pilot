@@ -59,8 +59,8 @@ export function SelectView({ onTicketsSelected }: SelectViewProps) {
     <div className="flex overflow-hidden flex-col flex-1 gap-5 p-6 animate-fade">
       <div className="flex justify-between items-center">
         <div className="flex gap-3 items-center">
-          <div className="flex justify-center items-center w-9 h-9 rounded-xl bg-accent/10">
-            <FolderSearch size={18} className="text-accent-light" />
+          <div className="flex justify-center items-center w-9 h-9 rounded-lg bg-accent-dim">
+            <FolderSearch size={18} className="text-accent-text" />
           </div>
           <div>
             <h2 className="text-base font-semibold text-ink">Select Tickets</h2>
@@ -115,7 +115,7 @@ export function SelectView({ onTicketsSelected }: SelectViewProps) {
             <span className="flex gap-2 items-center">
               <span className="font-medium">{v.name}</span>
               {v.overdue && (
-                <span className="text-[10px] text-err bg-err/10 px-1.5 py-0.5 rounded">
+                <span className="text-[10px] text-err bg-err/10 px-1.5 py-0.5 rounded-md border border-err/20">
                   overdue
                 </span>
               )}
@@ -133,8 +133,8 @@ export function SelectView({ onTicketsSelected }: SelectViewProps) {
         />
       </div>
 
-      <div className="flex overflow-hidden flex-col flex-1 glass">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
+      <div className="flex overflow-hidden flex-col flex-1 surface">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-subtle">
           <div className="flex gap-3 items-center">
             <span className="text-xs font-medium text-ink-muted">
               {tickets.data
@@ -148,7 +148,7 @@ export function SelectView({ onTicketsSelected }: SelectViewProps) {
             <div className="flex gap-2 items-center">
               <button
                 onClick={() => selection.selectAll(tickets.data!)}
-                className="text-[11px] text-accent-light hover:text-accent transition-colors"
+                className="text-[11px] text-accent-text hover:text-accent transition-colors"
               >
                 Select all
               </button>
@@ -310,14 +310,14 @@ function Dropdown<T>({
         )}
       >
         <span
-          className={clsx("truncate", value ? "text-ink" : "text-ink-faint")}
+          className={clsx("truncate", value ? "text-ink" : "text-ink-muted")}
         >
           {value || placeholder}
         </span>
         {loading ? (
           <Loader2 size={14} className="animate-spin text-accent shrink-0" />
         ) : (
-          <ChevronDown size={14} className="text-ink-faint shrink-0" />
+          <ChevronDown size={14} className="text-ink-muted shrink-0" />
         )}
       </button>
 
@@ -332,18 +332,18 @@ function Dropdown<T>({
         <>
           <div className="fixed inset-0 z-10" aria-hidden onClick={close} />
           <div
-            className="flex absolute top-full z-30 flex-col p-1 mt-1 w-full max-h-72 glass-popover animate-fade"
+            className="flex absolute top-full z-30 flex-col p-1 mt-1 w-full max-h-72 glass animate-fade"
             onMouseDown={(e) => e.preventDefault()}
           >
-            <div className="flex items-center gap-2 px-2 py-1.5 mb-0.5 border-b border-white/[0.06]">
-              <Search size={14} className="text-ink-faint shrink-0" />
+            <div className="flex items-center gap-2 px-2 py-1.5 mb-0.5 border-b border-subtle">
+              <Search size={14} className="text-ink-muted shrink-0" />
               <input
                 ref={searchInputRef}
                 type="text"
                 value={filterQuery}
                 onChange={(e) => setFilterQuery(e.target.value)}
                 placeholder="Filter..."
-                className="py-1 w-full text-sm bg-transparent outline-none text-ink placeholder:text-ink-faint"
+                className="py-1 w-full text-sm bg-transparent outline-none text-ink placeholder:text-ink-muted"
                 autoComplete="off"
                 spellCheck={false}
               />
@@ -362,7 +362,7 @@ function Dropdown<T>({
                       onSelect(item);
                       close();
                     }}
-                    className="w-full text-left px-3 py-2 rounded-lg text-sm hover:bg-white/[0.06] transition-colors"
+                    className="px-3 py-2 w-full text-sm text-left rounded-lg transition-colors hover:bg-surface-overlay"
                   >
                     {renderItem(item)}
                   </button>
@@ -390,7 +390,7 @@ function TicketRow({
   const priorityColor: Record<string, string> = {
     Highest: "text-err",
     High: "text-warn",
-    Medium: "text-accent-light",
+    Medium: "text-accent-text",
     Low: "text-ink-muted",
     Lowest: "text-ink-faint",
   };
@@ -400,8 +400,10 @@ function TicketRow({
       onClick={onToggle}
       style={{ animationDelay: `${index * 30}ms` }}
       className={clsx(
-        "flex items-center gap-3 px-4 py-3 border-b border-white/[0.03] cursor-pointer transition-all duration-150 animate-in",
-        selected ? "bg-accent/[0.06]" : "hover:bg-white/[0.02]",
+        "flex items-center gap-3 px-4 py-3 border-b border-subtle cursor-pointer transition-all duration-100 animate-in border-l-2",
+        selected
+          ? "bg-[rgba(15,184,163,0.07)] border-l-accent"
+          : "hover:bg-surface-overlay border-l-transparent",
       )}
     >
       <div
@@ -409,13 +411,15 @@ function TicketRow({
           "flex justify-center items-center w-4 h-4 rounded border transition-all shrink-0",
           selected
             ? "bg-accent border-accent"
-            : "border-white/15 hover:border-white/25",
+            : "border-muted hover:border-ink-faint",
         )}
       >
-        {selected && <Check size={10} className="text-white" />}
+        {selected && (
+          <Check size={10} strokeWidth={2.5} className="text-white" />
+        )}
       </div>
 
-      <span className="text-xs font-mono text-accent-light/80 w-[72px] shrink-0">
+      <span className="text-xs font-mono tabular-nums text-ink-muted w-[72px] shrink-0">
         {ticket.key}
       </span>
 
@@ -425,12 +429,12 @@ function TicketRow({
 
       <span
         className={clsx(
-          "text-[10px] font-medium px-2 py-0.5 rounded-full shrink-0",
+          "text-[10px] font-medium px-2 py-0.5 rounded-md shrink-0 border",
           ticket.status === "Closed" || ticket.status === "Done"
-            ? "bg-ok/10 text-ok"
+            ? "bg-ok/10 text-ok border-ok/20"
             : ticket.status === "Open"
-              ? "bg-warn/10 text-warn"
-              : "bg-white/5 text-ink-muted",
+              ? "bg-warn/10 text-warn border-warn/20"
+              : "bg-surface-overlay text-ink-muted border-subtle",
         )}
       >
         {ticket.status}
@@ -438,14 +442,14 @@ function TicketRow({
 
       <span
         className={clsx(
-          "text-[11px] shrink-0 w-12 text-right",
+          "text-[11px] shrink-0 w-12 text-right tabular-nums",
           priorityColor[ticket.priority] || "text-ink-muted",
         )}
       >
         {ticket.priority}
       </span>
 
-      <span className="text-[11px] text-ink-faint w-20 truncate text-right shrink-0">
+      <span className="text-[11px] text-ink-muted w-20 truncate text-right shrink-0">
         {ticket.assignee}
       </span>
     </div>

@@ -1,5 +1,5 @@
 /**
- * API client for the Regression Pilot backend.
+ * API client for the Testdeck backend.
  * All HTTP calls to FastAPI go through here.
  */
 
@@ -13,6 +13,9 @@ import type {
   ChatMessage,
   ZephyrFolder,
   PushResult,
+  Preferences,
+  TestConnectionResult,
+  CredentialsPayload,
 } from "@/types";
 
 const BASE = "http://127.0.0.1:8000";
@@ -145,4 +148,34 @@ export async function pushTestCases(
       folder_id: folderId,
     }),
   });
+}
+
+export async function getPreferences() {
+  return request<Preferences>("/config/preferences");
+}
+
+export async function savePreferences(prefs: Partial<Preferences>) {
+  return request<Preferences>("/config/preferences", {
+    method: "POST",
+    body: JSON.stringify(prefs),
+  });
+}
+
+export async function updateCredentials(creds: CredentialsPayload) {
+  return request<{ updated: string[] }>("/config/credentials", {
+    method: "POST",
+    body: JSON.stringify(creds),
+  });
+}
+
+export async function testJiraConnection() {
+  return request<TestConnectionResult>("/config/test-jira");
+}
+
+export async function testGeminiConnection() {
+  return request<TestConnectionResult>("/config/test-gemini");
+}
+
+export async function testZephyrConnection() {
+  return request<TestConnectionResult>("/config/test-zephyr");
 }

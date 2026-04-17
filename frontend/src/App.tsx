@@ -16,6 +16,16 @@ export default function App() {
   const [projectKey, setProjectKey] = useState("FM");
   const [hasAutoRedirected, setHasAutoRedirected] = useState<boolean>(false);
   const [manualSetupOpen, setManualSetupOpen] = useState<boolean>(false);
+  const [version, setVersion] = useState<string>("…")
+  
+  useEffect(() => {
+    fetch("http://localhost:8000/health")
+      .then(r => r.json())
+      .then(data => {
+        if (data.version) setVersion(`v${data.version}`);
+      })
+      .catch(() => {}); // silently ignore if backend isn't up yet
+  }, []);
 
   const handleStatusResolved = (status: ConfigStatus) => {
     setJiraReady(status.jira.configured);
@@ -53,6 +63,7 @@ export default function App() {
         currentView={view}
         onNavigate={handleNavigate}
         jiraReady={jiraReady}
+        version={version}
         hasTickets={selectedTickets.length > 0}
         hasTestCases={testCases.length > 0}
       />

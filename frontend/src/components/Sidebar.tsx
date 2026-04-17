@@ -12,6 +12,7 @@ interface SidebarProps {
   currentView: AppView;
   onNavigate: (view: AppView) => void;
   jiraReady: boolean;
+  version: string;
   hasTickets: boolean;
   hasTestCases: boolean;
 }
@@ -40,6 +41,7 @@ export function Sidebar({
   currentView,
   onNavigate,
   jiraReady,
+  version,
   hasTickets,
   hasTestCases,
 }: SidebarProps) {
@@ -127,6 +129,9 @@ export function Sidebar({
         </div>
         <p className="text-[9px] text-ink-muted mt-1 font-mono">
           Gemini 2.5 Flash
+        </p>
+        <p className="text-[9px] text-ink-muted mt-1 font-mono">
+          {"Version: " + version}
         </p>
       </div>
     </aside>

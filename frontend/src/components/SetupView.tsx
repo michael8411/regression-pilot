@@ -263,34 +263,6 @@ export function SetupView({ onStatusResolved }: SetupViewProps) {
 
           <hr className="border-subtle" />
 
-          {/* Gemini */}
-          <div className="space-y-2.5">
-            <div className="flex justify-between items-center">
-              <label className="text-[12.5px] font-medium text-ink">Gemini</label>
-              <button
-                onClick={() => openUrl("https://aistudio.google.com/apikey")}
-                className="flex items-center gap-1 text-[10px] text-accent-text/60 hover:text-accent-text transition-colors"
-              >
-                Get API key <ExternalLink size={10} />
-              </button>
-            </div>
-            <PasswordInput
-              value={geminiKey}
-              onChange={setGeminiKey}
-              placeholder="Gemini API key"
-              visible={showGeminiKey}
-              onToggleVisibility={() => setShowGeminiKey(!showGeminiKey)}
-            />
-            <TestButton
-              state={geminiTest}
-              result={geminiResult}
-              onClick={handleTestGemini}
-              label="Test Gemini"
-            />
-          </div>
-
-          <hr className="border-subtle" />
-
           {/* Zephyr */}
           <div className="space-y-2.5">
             <div className="flex justify-between items-center">
@@ -322,6 +294,33 @@ export function SetupView({ onStatusResolved }: SetupViewProps) {
             />
           </div>
 
+          <hr className="border-subtle" />
+          
+          {/* Gemini */}
+          <div className="space-y-2.5">
+            <div className="flex justify-between items-center">
+              <label className="text-[12.5px] font-medium text-ink">Gemini</label>
+              <button
+                onClick={() => openUrl("https://aistudio.google.com/apikey")}
+                className="flex items-center gap-1 text-[10px] text-accent-text/60 hover:text-accent-text transition-colors"
+              >
+                Get API key <ExternalLink size={10} />
+              </button>
+            </div>
+            <PasswordInput
+              value={geminiKey}
+              onChange={setGeminiKey}
+              placeholder="Gemini API key"
+              visible={showGeminiKey}
+              onToggleVisibility={() => setShowGeminiKey(!showGeminiKey)}
+            />
+            <TestButton
+              state={geminiTest}
+              result={geminiResult}
+              onClick={handleTestGemini}
+              label="Test Gemini"
+            />
+          </div>
           <button
             onClick={handleSaveCredentials}
             disabled={credSaving}

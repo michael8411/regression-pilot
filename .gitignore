@@ -3,6 +3,9 @@ backend/.env
 backend/.env.*
 !backend/.env.example
 backend/preferences.json
+backend/testdeck.db
+backend/testdeck.db-wal
+backend/testdeck.db-shm
 backend/logs/
 backend/__pycache__/
 backend/.venv/

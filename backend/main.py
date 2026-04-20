@@ -14,6 +14,8 @@ try:
     from backend.api.zephyr_routes import router as zephyr_router
     from backend.config.logging_config import setup_logging
     from backend.config.settings import get_settings
+    from backend.services.config_service import migrate_env_to_keyring
+    from backend.utils.crypto import get_encryptor
 except ImportError:  # pragma: no cover - supports running from backend/ as script
     from api.ai_routes import router as ai_router
     from api.config_routes import router as config_router
@@ -22,8 +24,11 @@ except ImportError:  # pragma: no cover - supports running from backend/ as scri
     from api.zephyr_routes import router as zephyr_router
     from config.logging_config import setup_logging
     from config.settings import get_settings
+    from services.config_service import migrate_env_to_keyring
+    from utils.crypto import get_encryptor
 
 settings = get_settings()
+
 is_dev = settings.app_env.lower() in {"dev", "development", "local"}
 setup_logging(
     log_level=settings.log_level,
@@ -35,6 +40,7 @@ logger = structlog.get_logger("testdeck.backend")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global settings
     configured = settings.jira_configured
     logger.info(
         "backend_starting",
@@ -42,6 +48,12 @@ async def lifespan(app: FastAPI):
         gemini_configured=bool(settings.gemini_api_key),
         zephyr_configured=bool(settings.zephyr_api_token),
     )
+    migrated = migrate_env_to_keyring()
+    logger.info("credential_migration_check", migrated_to_keyring=migrated)
+    if migrated:
+        settings = get_settings()
+    get_encryptor()
+    logger.info("encryptor_initialized")
     yield
     logger.info("backend_stopping")
 

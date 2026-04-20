@@ -44,7 +44,6 @@ def setup_logging(
         force=True,
     )
 
-    # In dev reload mode, suppress noisy watcher/access logs.
     if quiet_external_loggers:
         logging.getLogger("watchfiles").setLevel(logging.WARNING)
         logging.getLogger("watchfiles.main").setLevel(logging.WARNING)

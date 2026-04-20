@@ -6,3 +6,6 @@ pydantic==2.9.0
 pydantic-settings==2.5.0
 google-genai>=1.0.0
 structlog==25.5.0
+aiosqlite>=0.20.0
+cryptography>=42.0.0
+keyring>=25.0.0

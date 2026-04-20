@@ -1,7 +1,5 @@
-import re
-from pathlib import Path
-
 import httpx
+import structlog
 from fastapi import APIRouter, HTTPException
 
 try:
@@ -11,26 +9,26 @@ try:
         CredentialsUpdateRequest,
         PreferencesUpdateRequest,
     )
+    from backend.services.config_service import update_keyring_credentials
 except ImportError:  # pragma: no cover - supports running from backend/ as script
     from config.preferences import read_preferences, write_preferences
     from config.settings import get_settings
     from schemas.request_models import CredentialsUpdateRequest, PreferencesUpdateRequest
+    from services.config_service import update_keyring_credentials
 
+
+logger = structlog.get_logger("testdeck.config_routes")
 router = APIRouter(prefix="/config", tags=["config"])
 
-ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
-
-_FIELD_TO_ENV: dict[str, str] = {
-    "jira_base_url": "JIRA_BASE_URL",
-    "jira_email": "JIRA_EMAIL",
-    "jira_api_token": "JIRA_API_TOKEN",
-    "gemini_api_key": "GEMINI_API_KEY",
-    "zephyr_base_url": "ZEPHYR_BASE_URL",
-    "zephyr_api_token": "ZEPHYR_API_TOKEN",
+_FIELD_TO_KEYRING_KEY: dict[str, str] = {
+    "jira_base_url": "jira_base_url",
+    "jira_email": "jira_email",
+    "jira_api_token": "jira_api_token",
+    "gemini_api_key": "gemini_api_key",
+    "zephyr_base_url": "zephyr_base_url",
+    "zephyr_api_token": "zephyr_api_token",
 }
 
-
-# ── /config/status ────────────────────────────────────────────
 
 @router.get("/status")
 async def config_status():
@@ -57,50 +55,24 @@ async def save_preferences(req: PreferencesUpdateRequest):
     return write_preferences(updates)
 
 
-# ── /config/credentials ───────────────────────────────────────
-
 @router.post("/credentials")
 async def update_credentials(req: CredentialsUpdateRequest):
     raw = req.model_dump(exclude_none=True)
     updates: dict[str, str] = {}
     for field, value in raw.items():
-        env_key = _FIELD_TO_ENV.get(field)
-        if not env_key:
+        if field not in _FIELD_TO_KEYRING_KEY:
             continue
-        # Pydantic may wrap in SecretStr or HttpUrl — get the plain string
         str_value = str(value.get_secret_value() if hasattr(value, "get_secret_value") else value)
-        updates[env_key] = str_value.rstrip("/") if field.endswith("_url") else str_value
+        updates[field] = str_value.rstrip("/") if field.endswith("_url") else str_value
 
     if not updates:
         return {"updated": []}
 
-    _write_env(updates)
-    get_settings.cache_clear()
+    written = update_keyring_credentials(updates)
+    logger.info("credentials_endpoint_updated", updated=written)
 
-    return {"updated": list(updates.keys())}
+    return {"updated": written}
 
-
-def _write_env(updates: dict[str, str]) -> None:
-    """Update or append key=value lines in the .env file."""
-    text = ENV_PATH.read_text(encoding="utf-8") if ENV_PATH.exists() else ""
-    lines = text.splitlines(keepends=True)
-
-    for env_key, value in updates.items():
-        pattern = re.compile(rf"^{re.escape(env_key)}\s*=.*$", re.MULTILINE)
-        new_line = f"{env_key}={value}\n"
-        if pattern.search(text):
-            lines = [
-                new_line if re.match(rf"^{re.escape(env_key)}\s*=", line) else line
-                for line in lines
-            ]
-        else:
-            lines.append(new_line)
-        text = "".join(lines)
-
-    ENV_PATH.write_text(text, encoding="utf-8")
-
-
-# ── /config/test-* ────────────────────────────────────────────
 
 @router.get("/test-jira")
 async def test_jira():

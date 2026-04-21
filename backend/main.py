@@ -14,6 +14,7 @@ try:
     from backend.api.zephyr_routes import router as zephyr_router
     from backend.config.logging_config import setup_logging
     from backend.config.settings import get_settings
+    from backend.db.init import init_db
     from backend.services.config_service import migrate_env_to_keyring
     from backend.utils.crypto import get_encryptor
 except ImportError:  # pragma: no cover - supports running from backend/ as script
@@ -24,6 +25,7 @@ except ImportError:  # pragma: no cover - supports running from backend/ as scri
     from api.zephyr_routes import router as zephyr_router
     from config.logging_config import setup_logging
     from config.settings import get_settings
+    from db.init import init_db
     from services.config_service import migrate_env_to_keyring
     from utils.crypto import get_encryptor
 
@@ -54,6 +56,7 @@ async def lifespan(app: FastAPI):
         settings = get_settings()
     get_encryptor()
     logger.info("encryptor_initialized")
+    await init_db()
     yield
     logger.info("backend_stopping")
 

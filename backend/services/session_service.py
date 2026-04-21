@@ -199,6 +199,19 @@ async def get_state(session_id: str, key: str) -> Any | None:
             )
             return None
 
+async def activate_session(session_id: str) -> dict | None:
+    async with get_connection() as db:
+        await db.execute("BEGIN IMMEDIATE")
+        await db.execute("UPDATE sessions SET is_active = 0 WHERE is_active = 1")
+        await db.execute(
+            "UPDATE sessions SET is_active = 1 WHERE id = ?",
+            (session_id,),
+        )
+        await db.commit()
+    logger.info("session_activated", session_id=session_id)
+    return await get_active_session()
+
+
 async def delete_session(session_id: str) -> None:
     async with get_connection() as db:
         await db.execute(
@@ -206,4 +219,4 @@ async def delete_session(session_id: str) -> None:
             (session_id,),
         )
         await db.commit()
-        logger.info("session_deleted", session_id=session_id)
+    logger.info("session_deleted", session_id=session_id)

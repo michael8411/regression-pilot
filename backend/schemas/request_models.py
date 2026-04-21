@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Literal, Any
 
 from pydantic import BaseModel, EmailStr, Field, HttpUrl, SecretStr
 
@@ -45,3 +45,12 @@ class CredentialsUpdateRequest(BaseModel):
     gemini_api_key: SecretStr | None = None
     zephyr_base_url: HttpUrl | None = None
     zephyr_api_token: SecretStr | None = None
+
+class CreateSessionRequest(BaseModel):
+    project_key: str
+    version_name: str
+
+class SaveStateRequest(BaseModel):
+    key: str | None = None
+    value: Any | None = None
+    items: dict[str, Any] | None = None

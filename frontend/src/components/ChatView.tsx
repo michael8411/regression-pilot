@@ -6,10 +6,12 @@ import type { ChatMessage, JiraTicket } from "@/types";
 
 interface ChatViewProps {
   tickets: JiraTicket[];
+  initialMessages?: ChatMessage[];
+  saveStateImmediate: (key: string, value: unknown) => Promise<void>;
 }
 
-export function ChatView({ tickets }: ChatViewProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+export function ChatView({ tickets, initialMessages, saveStateImmediate }: ChatViewProps) {
+  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages ?? []);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -19,6 +21,12 @@ export function ChatView({ tickets }: ChatViewProps) {
     if (scrollRef.current)
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages]);
+
+  useEffect(() => {
+    if (!streaming && messages.length > 0) {
+      void saveStateImmediate("chatMessages", messages);
+    }
+  }, [streaming, messages, saveStateImmediate]);
 
   const handleSend = async () => {
     const text = input.trim();

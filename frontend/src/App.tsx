@@ -5,8 +5,28 @@ import { SelectView } from "@/components/SelectView";
 import { GenerateView } from "@/components/GenerateView";
 import { ReviewView } from "@/components/ReviewView";
 import { ChatView } from "@/components/ChatView";
+import { useSession } from "@/hooks/useSession";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { AppView, ConfigStatus, JiraTicket, TestCase } from "@/types";
+import type { AppView, ChatMessage, ConfigStatus, JiraTicket, PushResult, TestCase } from "@/types";
+
+const VALID_VIEWS: AppView[] = ["setup", "select", "generate", "review", "chat"];
+
+function validateRestoredView(
+  candidate: string,
+  state: Record<string, any>,
+): AppView {
+  if (!VALID_VIEWS.includes(candidate as AppView)) return "setup";
+  const tickets = Array.isArray(state.selectedTickets) ? state.selectedTickets : [];
+  const cases = Array.isArray(state.testCases) ? state.testCases : [];
+
+  if (candidate === "review" && cases.length === 0) {
+    return tickets.length > 0 ? "generate" : "select";
+  }
+  if (candidate === "generate" && tickets.length === 0) return "select";
+  if (candidate === "chat" && tickets.length === 0) return "select";
+
+  return candidate as AppView;
+}
 
 export default function App() {
   const [view, setView] = useState<AppView>("setup");
@@ -14,23 +34,70 @@ export default function App() {
   const [selectedTickets, setSelectedTickets] = useState<JiraTicket[]>([]);
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [projectKey, setProjectKey] = useState("FM");
+  const [currentVersionName, setCurrentVersionName] = useState<string | null>(null);
   const [hasAutoRedirected, setHasAutoRedirected] = useState<boolean>(false);
   const [manualSetupOpen, setManualSetupOpen] = useState<boolean>(false);
-  const [version, setVersion] = useState<string>("…")
-  
+  const [version, setVersion] = useState<string>("…");
+
+  const {
+    sessionId,
+    restoredState,
+    isRestoring,
+    createSession,
+    saveState,
+    saveStateImmediate,
+    saveStateBatch,
+  } = useSession();
+
   useEffect(() => {
     fetch("http://localhost:8000/health")
       .then(r => r.json())
       .then(data => {
         if (data.version) setVersion(`v${data.version}`);
       })
-      .catch(() => {}); // silently ignore if backend isn't up yet
+      .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!restoredState || Object.keys(restoredState).length === 0) return;
+
+    if (Array.isArray(restoredState.selectedTickets)) {
+      setSelectedTickets(restoredState.selectedTickets as JiraTicket[]);
+    }
+    if (Array.isArray(restoredState.testCases)) {
+      setTestCases(restoredState.testCases as TestCase[]);
+    }
+    if (typeof restoredState.projectKey === "string") {
+      setProjectKey(restoredState.projectKey);
+    }
+    const savedVersion = restoredState.selectedVersion;
+    if (
+      savedVersion &&
+      typeof savedVersion === "object" &&
+      typeof savedVersion.name === "string"
+    ) {
+      setCurrentVersionName(savedVersion.name);
+    }
+    if (typeof restoredState.currentView === "string") {
+      const safeView = validateRestoredView(restoredState.currentView, restoredState);
+      setView(safeView);
+      if (safeView !== "setup") {
+        setHasAutoRedirected(true);
+      }
+    }
+  }, [restoredState]);
+
+  if (isRestoring) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-sm text-ink-muted">Loading...</div>
+      </div>
+    );
+  }
 
   const handleStatusResolved = (status: ConfigStatus) => {
     setJiraReady(status.jira.configured);
 
-    // First successful config check can move setup -> select, unless user explicitly opened Config.
     if (status.jira.configured && !hasAutoRedirected && !manualSetupOpen) {
       setView("select");
       setHasAutoRedirected(true);
@@ -40,20 +107,55 @@ export default function App() {
   const handleNavigate = (nextView: AppView) => {
     setManualSetupOpen(nextView === "setup");
     setView(nextView);
+    saveState("currentView", nextView);
   };
 
-  const handleTicketsSelected = (tickets: JiraTicket[]) => {
+  const handleTicketsSelected = async (
+    tickets: JiraTicket[],
+    versionName?: string,
+  ) => {
+    const key = tickets.length > 0 ? tickets[0].key.split("-")[0] : projectKey;
+    const resolvedVersion = versionName ?? null;
+
+    // A new session is required when there is none yet, or when the user has
+    // moved to a different project / version than the current session tracks.
+    const needsNewSession =
+      !sessionId ||
+      key !== projectKey ||
+      resolvedVersion !== currentVersionName;
+
     setSelectedTickets(tickets);
-    if (tickets.length > 0) {
-      setProjectKey(tickets[0].key.split("-")[0]);
-    }
+    setProjectKey(key);
+    setCurrentVersionName(resolvedVersion);
     setView("generate");
+
+    if (needsNewSession) {
+      await createSession(key, versionName);
+    }
+
+    saveStateBatch({
+      selectedTickets: tickets,
+      projectKey: key,
+      currentView: "generate",
+    });
   };
 
   const handleGenerated = (cases: TestCase[]) => {
     setTestCases(cases);
     setView("review");
+    saveStateBatch({
+      testCases: cases,
+      currentView: "review",
+    });
   };
+
+  const restoredGroups =
+    restoredState &&
+    restoredState.editableGroups &&
+    typeof restoredState.editableGroups === "object" &&
+    !Array.isArray(restoredState.editableGroups)
+      ? (restoredState.editableGroups as Record<string, JiraTicket[]>)
+      : undefined;
 
   return (
     <div className="flex h-full">
@@ -75,13 +177,19 @@ export default function App() {
           <SetupView onStatusResolved={handleStatusResolved} />
         )}
         {view === "select" && (
-          <SelectView onTicketsSelected={handleTicketsSelected} />
+          <SelectView
+            onTicketsSelected={handleTicketsSelected}
+            saveState={saveState}
+          />
         )}
         {view === "generate" && (
           <GenerateView
             tickets={selectedTickets}
             onGenerated={handleGenerated}
             onBack={() => setView("select")}
+            saveState={saveState}
+            initialInstructions={restoredState?.instructions as string | undefined}
+            initialGroups={restoredGroups}
           />
         )}
         {view === "review" && (
@@ -90,9 +198,17 @@ export default function App() {
             projectKey={projectKey}
             onBack={() => setView("generate")}
             onUpdateTestCases={setTestCases}
+            saveStateImmediate={saveStateImmediate}
+            initialPushResult={restoredState?.pushResult as PushResult | undefined}
           />
         )}
-        {view === "chat" && <ChatView tickets={selectedTickets} />}
+        {view === "chat" && (
+          <ChatView
+            tickets={selectedTickets}
+            saveStateImmediate={saveStateImmediate}
+            initialMessages={restoredState?.chatMessages as ChatMessage[] | undefined}
+          />
+        )}
       </main>
     </div>
   );

@@ -14,10 +14,11 @@ import { useAsync, useSelection } from "@/hooks/useAsync";
 import type { JiraProject, JiraVersion, JiraTicket } from "@/types";
 
 interface SelectViewProps {
-  onTicketsSelected: (tickets: JiraTicket[]) => void;
+  onTicketsSelected: (tickets: JiraTicket[], versionName?: string) => void;
+  saveState: (key: string, value: unknown) => void;
 }
 
-export function SelectView({ onTicketsSelected }: SelectViewProps) {
+export function SelectView({ onTicketsSelected, saveState }: SelectViewProps) {
   const projects = useAsync<JiraProject[]>();
   const versions = useAsync<JiraVersion[]>();
   const tickets = useAsync<JiraTicket[]>();
@@ -39,12 +40,14 @@ export function SelectView({ onTicketsSelected }: SelectViewProps) {
     setSelectedVersion(null);
     tickets.reset();
     selection.deselectAll();
+    saveState("selectedProject", project);
     await versions.execute(() => getVersions(project.key));
   };
 
   const handleVersionSelect = async (version: JiraVersion) => {
     setSelectedVersion(version);
     selection.deselectAll();
+    saveState("selectedVersion", version);
     const result = await tickets.execute(() => getTickets(version.name));
     if (result) selection.selectAll(result);
   };
@@ -52,7 +55,7 @@ export function SelectView({ onTicketsSelected }: SelectViewProps) {
   const handleProceed = () => {
     if (!tickets.data) return;
     const selected = tickets.data.filter((t) => selection.isSelected(t.key));
-    onTicketsSelected(selected);
+    onTicketsSelected(selected, selectedVersion?.name);
   };
 
   return (

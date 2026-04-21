@@ -48,7 +48,7 @@ class CredentialsUpdateRequest(BaseModel):
 
 class CreateSessionRequest(BaseModel):
     project_key: str
-    version_name: str
+    version_name: str | None = None
 
 class SaveStateRequest(BaseModel):
     key: str | None = None

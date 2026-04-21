@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Sparkles,
   Loader2,
@@ -37,21 +37,31 @@ interface GenerateViewProps {
   tickets: JiraTicket[];
   onGenerated: (testCases: TestCase[]) => void;
   onBack: () => void;
+  saveState: (key: string, value: unknown) => void;
+  initialInstructions?: string;
+  initialGroups?: Record<string, JiraTicket[]>;
 }
 
 export function GenerateView({
   tickets,
   onGenerated,
   onBack,
+  saveState,
+  initialInstructions,
+  initialGroups,
 }: GenerateViewProps) {
-  const [instructions, setInstructions] = useState("");
+  const [instructions, setInstructions] = useState(initialInstructions ?? "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [grouping, setGrouping] = useState<GroupTicketsResponse | null>(null);
   const [groupingLoading, setGroupingLoading] = useState(false);
   const [editableGroups, setEditableGroups] = useState<
     Record<string, JiraTicket[]>
-  >({});
+  >(initialGroups ?? {});
+  // If we restored groups from a session, skip the auto-grouping effect.
+  const restoredGroupsRef = useRef(
+    initialGroups !== undefined && Object.keys(initialGroups).length > 0
+  );
   const [newGroupName, setNewGroupName] = useState("");
   const [activeTicketKey, setActiveTicketKey] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
@@ -113,7 +123,9 @@ export function GenerateView({
   );
 
   useEffect(() => {
-    setEditableGroups(grouped);
+    if (!restoredGroupsRef.current) {
+      setEditableGroups(grouped);
+    }
   }, [grouped]);
 
   const ticketToGroup = useMemo(() => {
@@ -172,26 +184,23 @@ export function GenerateView({
       const activeIndex = fromItems.findIndex((t) => t.key === activeId);
       if (activeIndex === -1) return prev;
 
+      let next: Record<string, JiraTicket[]>;
       if (fromGroup === toGroup) {
         const overIndex = toItems.findIndex((t) => t.key === overIdLocal);
         if (overIndex === -1 || overIndex === activeIndex) return prev;
-        return {
-          ...prev,
-          [fromGroup]: arrayMove(fromItems, activeIndex, overIndex),
-        };
+        next = { ...prev, [fromGroup]: arrayMove(fromItems, activeIndex, overIndex) };
+      } else {
+        const movingTicket = fromItems[activeIndex];
+        const nextFrom = fromItems.filter((t) => t.key !== activeId);
+        const overIndex = toItems.findIndex((t) => t.key === overIdLocal);
+        const insertIndex = overIndex >= 0 ? overIndex : toItems.length;
+        const nextTo = [...toItems];
+        nextTo.splice(insertIndex, 0, movingTicket);
+        next = { ...prev, [fromGroup]: nextFrom, [toGroup]: nextTo };
       }
 
-      const movingTicket = fromItems[activeIndex];
-      const nextFrom = fromItems.filter((t) => t.key !== activeId);
-      const overIndex = toItems.findIndex((t) => t.key === overIdLocal);
-      const insertIndex = overIndex >= 0 ? overIndex : toItems.length;
-      const nextTo = [...toItems];
-      nextTo.splice(insertIndex, 0, movingTicket);
-      return {
-        ...prev,
-        [fromGroup]: nextFrom,
-        [toGroup]: nextTo,
-      };
+      saveState("editableGroups", next);
+      return next;
     });
   };
 
@@ -267,7 +276,10 @@ export function GenerateView({
         </label>
         <textarea
           value={instructions}
-          onChange={(e) => setInstructions(e.target.value)}
+          onChange={(e) => {
+            setInstructions(e.target.value);
+            saveState("instructions", e.target.value);
+          }}
           placeholder="E.g., Focus on sync edge cases, include offline scenarios, pay attention to multi-BU switching..."
           className="w-full h-24 text-sm resize-none g-input"
         />

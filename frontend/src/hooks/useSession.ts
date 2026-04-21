@@ -35,17 +35,24 @@ export function useSession() {
       try {
         const session: Session = await getActiveSession();
         if (cancelled) return;
+        const safeState =
+          session.state && typeof session.state === "object" && !Array.isArray(session.state)
+            ? session.state
+            : {};
+        sessionIdRef.current = session.id;
         setSessionId(session.id);
-        setRestoredState(session.state ?? {});
+        setRestoredState(safeState);
         if (import.meta.env.DEV) {
-          console.log("Session restored. Keys:", Object.keys(session.state ?? {}));
+          console.log("Session restored. Keys:", Object.keys(safeState));
         }
       } catch {
+        // 404 (no session), network failure, or backend down — all treated as a clean start.
         if (cancelled) return;
+        sessionIdRef.current = null;
         setSessionId(null);
         setRestoredState({});
         if (import.meta.env.DEV) {
-          console.log("No active session found — starting fresh.");
+          console.log("No active session available — starting fresh.");
         }
       } finally {
         if (!cancelled) setIsRestoring(false);
@@ -71,6 +78,7 @@ export function useSession() {
   const createSession = useCallback(
     async (projectKey: string, versionName?: string): Promise<void> => {
       const session = await createSessionApi(projectKey, versionName);
+      sessionIdRef.current = session.id;
       setSessionId(session.id);
     },
     []

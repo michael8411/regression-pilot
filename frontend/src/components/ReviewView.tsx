@@ -11,13 +11,15 @@ import {
   Trash2,
 } from "lucide-react";
 import { pushTestCases } from "@/lib/api";
-import type { TestCase } from "@/types";
+import type { PushResult, TestCase } from "@/types";
 
 interface ReviewViewProps {
   testCases: TestCase[];
   projectKey: string;
   onBack: () => void;
   onUpdateTestCases: (cases: TestCase[]) => void;
+  saveStateImmediate: (key: string, value: unknown) => Promise<void>;
+  initialPushResult?: PushResult;
 }
 
 export function ReviewView({
@@ -25,11 +27,13 @@ export function ReviewView({
   projectKey,
   onBack,
   onUpdateTestCases,
+  saveStateImmediate,
+  initialPushResult,
 }: ReviewViewProps) {
   const [expandedIndex, setExpandedIndex] = useState<number | null>(0);
   const [pushing, setPushing] = useState(false);
-  const [pushResult, setPushResult] = useState<{ created: number } | null>(
-    null,
+  const [pushResult, setPushResult] = useState<PushResult | null>(
+    initialPushResult ?? null,
   );
   const [error, setError] = useState<string | null>(null);
 
@@ -39,6 +43,7 @@ export function ReviewView({
     try {
       const result = await pushTestCases(projectKey, testCases);
       setPushResult(result);
+      void saveStateImmediate("pushResult", result);
     } catch (err: any) {
       setError(err.message);
     } finally {

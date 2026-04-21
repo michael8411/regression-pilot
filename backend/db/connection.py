@@ -1,9 +1,6 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
-from re import A
-
 import aiosqlite
-
 
 DB_PATH = Path(__file__).resolve().parent.parent / "testdeck.db"
 

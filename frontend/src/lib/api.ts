@@ -1,8 +1,3 @@
-/**
- * API client for the Testdeck backend.
- * All HTTP calls to FastAPI go through here.
- */
-
 import type {
   JiraProject,
   JiraVersion,
@@ -16,6 +11,9 @@ import type {
   Preferences,
   TestConnectionResult,
   CredentialsPayload,
+  Session,
+  SaveStateRequest,
+  SaveStateResponse
 } from "@/types";
 
 const BASE = "http://127.0.0.1:8000";
@@ -90,10 +88,6 @@ export async function sendChatMessage(
   });
 }
 
-/**
- * Stream a chat response via SSE.
- * Yields text chunks as they arrive.
- */
 export async function* streamChatMessage(
   messages: ChatMessage[],
   tickets?: JiraTicket[]
@@ -179,3 +173,41 @@ export async function testGeminiConnection() {
 export async function testZephyrConnection() {
   return request<TestConnectionResult>("/config/test-zephyr");
 }
+
+export async function getActiveSession() {
+  return request<Session>("/sessions/active");
+}
+
+export async function createSession(projectKey: string, version_name?: string) {
+  return request<Session>("/sessions", {
+    method: "POST",
+    body: JSON.stringify({ project_key: projectKey, version_name: version_name }),
+  });
+}
+
+export async function saveSessionState(sessionId: string, payload: SaveStateRequest) {
+  return request<SaveStateResponse>(`/sessions/${sessionId}/state`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function listSessions(limit?: number) {
+  const url = limit !== undefined ? `/sessions?limit=${limit}` : "/sessions";
+  return request<Session[]>(url, {
+    method: "GET",
+  });
+}
+
+export async function deleteSession(sessionId: string) {
+  return request<{ deleted: boolean }>(`/sessions/${sessionId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function activateSession(sessionId: string) {
+  return request<Session>(`/sessions/${sessionId}/activate`, {
+    method: "POST",
+  });
+}
+

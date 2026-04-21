@@ -131,3 +131,26 @@ export interface CredentialsPayload {
   gemini_api_key?: string;
   zephyr_api_token?: string;
 }
+
+export interface Session {
+  id: string;
+  project_key: string;
+  version_name: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  state: Record<string, any>;
+}
+
+export interface SaveStateRequest {
+  key?: string;
+  value?: any;
+  items?: Record<string, any>;
+}
+
+export interface SaveStateResponse {
+  saved: boolean;
+  secret_scan_warnings?: { pattern_name: string }[];
+}
+
+

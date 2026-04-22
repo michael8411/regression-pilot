@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { SetupView } from "@/components/SetupView";
 import { SelectView } from "@/components/SelectView";
@@ -39,6 +39,8 @@ export default function App() {
   const [manualSetupOpen, setManualSetupOpen] = useState<boolean>(false);
   const [version, setVersion] = useState<string>("…");
 
+  const hasRestoredRef = useRef(false);
+
   const {
     sessionId,
     restoredState,
@@ -59,7 +61,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!restoredState || Object.keys(restoredState).length === 0) return;
+    if (hasRestoredRef.current) return;
+    if (!restoredState) return;
+
+    hasRestoredRef.current = true;
+    if (Object.keys(restoredState).length === 0) return;
 
     if (Array.isArray(restoredState.selectedTickets)) {
       setSelectedTickets(restoredState.selectedTickets as JiraTicket[]);
@@ -116,9 +122,7 @@ export default function App() {
   ) => {
     const key = tickets.length > 0 ? tickets[0].key.split("-")[0] : projectKey;
     const resolvedVersion = versionName ?? null;
-
-    // A new session is required when there is none yet, or when the user has
-    // moved to a different project / version than the current session tracks.
+    
     const needsNewSession =
       !sessionId ||
       key !== projectKey ||

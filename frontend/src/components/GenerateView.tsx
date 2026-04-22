@@ -58,10 +58,35 @@ export function GenerateView({
   const [editableGroups, setEditableGroups] = useState<
     Record<string, JiraTicket[]>
   >(initialGroups ?? {});
-  // If we restored groups from a session, skip the auto-grouping effect.
-  const restoredGroupsRef = useRef(
-    initialGroups !== undefined && Object.keys(initialGroups).length > 0
+
+  const ticketSignature = useMemo(
+    () =>
+      tickets
+        .map((t) => t.key)
+        .sort()
+        .join("|"),
+    [tickets],
   );
+
+  // Covered keys in the restored groups — used to decide whether the cached
+  // grouping is still valid for the current ticket selection.
+  const restoredCoverageSignature = useMemo(() => {
+    if (!initialGroups) return null;
+    const keys: string[] = [];
+    for (const items of Object.values(initialGroups)) {
+      for (const t of items) keys.push(t.key);
+    }
+    if (keys.length === 0) return null;
+    return keys.sort().join("|");
+  }, [initialGroups]);
+
+  // True when the saved grouping already covers exactly this ticket set —
+  // in that case the Gemini grouping call is skipped entirely.
+  const restoredGroupsRef = useRef(
+    restoredCoverageSignature !== null &&
+      restoredCoverageSignature === ticketSignature,
+  );
+
   const [newGroupName, setNewGroupName] = useState("");
   const [activeTicketKey, setActiveTicketKey] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
@@ -98,6 +123,10 @@ export function GenerateView({
   };
 
   useEffect(() => {
+    // Cached grouping matches the current ticket set — do not call Gemini.
+    if (restoredGroupsRef.current) return;
+    if (tickets.length === 0) return;
+
     let cancelled = false;
     const loadGrouping = async () => {
       setGroupingLoading(true);
@@ -110,7 +139,7 @@ export function GenerateView({
         if (!cancelled) setGroupingLoading(false);
       }
     };
-    if (tickets.length > 0) loadGrouping();
+    loadGrouping();
     return () => {
       cancelled = true;
     };
@@ -123,10 +152,12 @@ export function GenerateView({
   );
 
   useEffect(() => {
-    if (!restoredGroupsRef.current) {
-      setEditableGroups(grouped);
-    }
-  }, [grouped]);
+    if (restoredGroupsRef.current) return;
+    setEditableGroups(grouped);
+    // Persist the first derived grouping so leaving and returning to this
+    // view does not trigger another Gemini call.
+    saveState("editableGroups", grouped);
+  }, [grouped, saveState]);
 
   const ticketToGroup = useMemo(() => {
     const map = new Map<string, string>();
@@ -205,7 +236,7 @@ export function GenerateView({
   };
 
   return (
-    <div className="flex overflow-hidden flex-col flex-1 gap-5 p-6 animate-fade">
+    <div className="flex overflow-hidden relative flex-col flex-1 gap-5 p-6 animate-fade">
       <div className="flex justify-between items-center">
         <div className="flex gap-3 items-center">
           <div className="flex justify-center items-center w-9 h-9 rounded-lg bg-accent-dim">
@@ -230,44 +261,74 @@ export function GenerateView({
         </button>
       </div>
 
-      <div className="overflow-y-auto overflow-x-hidden flex-1 p-4 min-h-0 surface">
-        {groupingLoading && (
-          <div className="text-[11px] text-ink-muted mb-3">
-            Organizing tickets into regression themes...
-          </div>
-        )}
-
-        <div className="flex gap-2 items-center mb-3">
+      <div className="relative overflow-y-auto overflow-x-hidden flex-1 p-4 min-h-0 surface">
+        <div
+          className={`flex gap-2 items-center mb-3 ${
+            groupingLoading ? "opacity-50 pointer-events-none" : ""
+          }`}
+        >
           <input
             value={newGroupName}
             onChange={(e) => setNewGroupName(e.target.value)}
             placeholder="Add category..."
             className="h-8 text-xs g-input"
+            disabled={groupingLoading}
           />
-          <button onClick={addGroup} className="g-btn text-xs px-3 py-1.5">
+          <button
+            onClick={addGroup}
+            className="g-btn text-xs px-3 py-1.5"
+            disabled={groupingLoading}
+          >
             Add
           </button>
         </div>
 
-        <DndContext
-          sensors={sensors}
-          collisionDetection={collisionDetectionStrategy}
-          modifiers={[restrictToVerticalAxis]}
-          onDragStart={handleDragStart}
-          onDragOver={handleDragOver}
-          onDragEnd={handleDragEnd}
+        <div
+          className={
+            groupingLoading ? "pointer-events-none select-none opacity-60" : ""
+          }
+          aria-busy={groupingLoading}
         >
-          {Object.entries(editableGroups).map(([groupName, groupTickets]) => (
-            <GroupDropSection
-              key={groupName}
-              groupName={groupName}
-              tickets={groupTickets}
-              overId={overId}
-              overGroupName={overGroupName}
-              activeTicketKey={activeTicketKey}
-            />
-          ))}
-        </DndContext>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={collisionDetectionStrategy}
+            modifiers={[restrictToVerticalAxis]}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDragEnd={handleDragEnd}
+          >
+            {Object.entries(editableGroups).map(
+              ([groupName, groupTickets]) => (
+                <GroupDropSection
+                  key={groupName}
+                  groupName={groupName}
+                  tickets={groupTickets}
+                  overId={overId}
+                  overGroupName={overGroupName}
+                  activeTicketKey={activeTicketKey}
+                />
+              ),
+            )}
+          </DndContext>
+        </div>
+
+        {groupingLoading && (
+          <div
+            className="flex absolute inset-0 z-20 justify-center items-center backdrop-blur-sm bg-scene/70"
+            role="status"
+            aria-live="polite"
+          >
+            <div className="flex gap-3 items-center px-4 py-3 rounded-lg border shadow-lg surface border-subtle">
+              <Loader2
+                size={18}
+                className="animate-spin text-accent-text"
+              />
+              <div className="text-sm text-ink">
+                Organizing tickets into themes...
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div>

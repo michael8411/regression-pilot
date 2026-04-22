@@ -27,6 +27,13 @@ export function useSession() {
 
   const debounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
+  const patchRestoredState = useCallback(
+    (patch: Record<string, unknown>): void => {
+      setRestoredState((prev) => ({ ...(prev ?? {}), ...patch }));
+    },
+    [],
+  );
+
   useEffect(() => {
     let cancelled = false;
 
@@ -113,6 +120,8 @@ export function useSession() {
 
   const saveState = useCallback(
     (key: string, value: unknown): void => {
+      patchRestoredState({ [key]: value });
+
       const existing = debounceRef.current[key];
       if (existing !== undefined) {
         clearTimeout(existing);
@@ -123,11 +132,13 @@ export function useSession() {
         await flushSave(key, value);
       }, delayForKey(key));
     },
-    [flushSave]
+    [flushSave, patchRestoredState],
   );
 
   const saveStateImmediate = useCallback(
     async (key: string, value: unknown): Promise<void> => {
+      patchRestoredState({ [key]: value });
+
       const existing = debounceRef.current[key];
       if (existing !== undefined) {
         clearTimeout(existing);
@@ -136,11 +147,13 @@ export function useSession() {
 
       await flushSave(key, value);
     },
-    [flushSave]
+    [flushSave, patchRestoredState],
   );
 
   const saveStateBatch = useCallback(
     async (items: Record<string, unknown>): Promise<void> => {
+      patchRestoredState(items);
+
       const id = sessionIdRef.current;
       if (!id) return;
 
@@ -153,7 +166,7 @@ export function useSession() {
         ) {
           console.warn(
             "Secret scan warnings (batch):",
-            response.secret_scan_warnings.map((w) => w.pattern_name)
+            response.secret_scan_warnings.map((w) => w.pattern_name),
           );
         }
       } catch (err) {
@@ -162,7 +175,7 @@ export function useSession() {
         }
       }
     },
-    []
+    [patchRestoredState],
   );
 
   return {

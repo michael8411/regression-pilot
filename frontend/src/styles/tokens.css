@@ -1,0 +1,104 @@
+:root.dark,
+.dark {
+  /* Surfaces — dark neutrals */
+  --surface-base:     #0B0D10;   /* app background */
+  --surface-panel:    #111418;   /* sidebar, top bar, app-root */
+  --surface-elevated: #161A1F;   /* cards, modals */
+  --surface-overlay:  #1C2126;   /* hover state, subtle pop */
+  --surface-input:    #0E1114;   /* inputs, code blocks (lighter than sunken) */
+  --surface-sunken:   #08090B;   /* code blocks, deepest surface */
+
+  /* Ink colors */
+  --ink:            #ECEFF3;
+  --ink-secondary:  #9CA3AF;     /* nav labels, body secondary */
+  --ink-muted:      #6B7280;     /* mono meta, captions */
+  --ink-faint:      #4A4F57;     /* dividers, disabled text */
+
+  /* Brand */
+  --accent:       #0FB8A3;
+  --accent-hover: #14D1B9;
+  --accent-text:  #4ECDC4;        /* lighter text variant */
+  --accent-dim:   rgba(15,184,163,0.10);
+  --accent-glow:  rgba(15,184,163,0.18);
+
+  /* AI — used for Assistant branding and AI-powered action buttons */
+  --ai:       #A78BFA;
+  --ai-dim:   rgba(167,139,250,0.10);
+  --ai-glow:  rgba(167,139,250,0.22);
+
+  --ok:    #22C55E;
+  --warn:  #F59E0B;
+  --err:   #F87171;
+  --info:  #60A5FA;
+
+  --border-subtle: rgba(255,255,255,0.06);
+  --border-muted:  rgba(255,255,255,0.10);
+  --border-strong: rgba(255,255,255,0.16);
+
+  --shadow-float:    0 8px 32px rgba(0,0,0,0.52), 0 2px 8px rgba(0,0,0,0.30), inset 0 1px 0 rgba(255,255,255,0.04);
+  --shadow-glow:     0 0 20px rgba(15,184,163,0.25);
+  --shadow-glow-sm:  0 0 10px rgba(15,184,163,0.15);
+  --shadow-ai:       0 0 20px rgba(167,139,250,0.22);
+
+  --radius-sm:   4px;
+  --radius-md:   6px;
+  --radius-lg:   8px;
+  --radius-xl:  12px;
+  --radius-2xl: 16px;
+
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast:    120ms;
+  --dur-base:    220ms;
+  --dur-slow:    320ms;
+}
+
+:root {
+  --surface-base:     #ffffff;
+  --surface-panel:    #f8f9fa;
+  --surface-elevated: #ffffff;
+  --surface-overlay:  #f1f3f5;
+  --surface-input:    #f1f3f5;
+  --surface-sunken:   #eceef1;
+
+  --ink:            #1a1b1e;
+  --ink-secondary:  #495057;
+  --ink-muted:      #6b7280;
+  --ink-faint:      #ced4da;
+
+  --accent:       #0FB8A3;
+  --accent-hover: #0DA193;
+  --accent-text:  #0B8877;
+  --accent-dim:   rgba(15,184,163,0.08);
+  --accent-glow:  rgba(15,184,163,0.16);
+
+  --ai:       #7C3AED;
+  --ai-dim:   rgba(124,58,237,0.08);
+  --ai-glow:  rgba(124,58,237,0.18);
+
+  --ok:    #16a34a;
+  --warn:  #d97706;
+  --err:   #dc2626;
+  --info:  #2563eb;
+
+  --border-subtle: rgba(0,0,0,0.06);
+  --border-muted:  rgba(0,0,0,0.10);
+  --border-strong: rgba(0,0,0,0.16);
+
+  --shadow-float:    0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
+  --shadow-glow:     0 0 20px rgba(15,184,163,0.18);
+  --shadow-glow-sm:  0 0 10px rgba(15,184,163,0.10);
+  --shadow-ai:       0 0 20px rgba(124,58,237,0.16);
+
+  --radius-sm:   4px;
+  --radius-md:   6px;
+  --radius-lg:   8px;
+  --radius-xl:  12px;
+  --radius-2xl: 16px;
+
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast:    120ms;
+  --dur-base:    220ms;
+  --dur-slow:    320ms;
+}

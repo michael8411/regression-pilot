@@ -11,6 +11,7 @@ export default {
           elevated: "var(--surface-elevated)",
           overlay: "var(--surface-overlay)",
           input: "var(--surface-input)",
+          sunken: "var(--surface-sunken)",
         },
         ink: {
           DEFAULT: "var(--ink)",
@@ -19,30 +20,57 @@ export default {
           faint: "var(--ink-faint)",
         },
         accent: {
-          DEFAULT: "#0fb8a3",
-          dim: "rgba(15,184,163,0.10)",
-          glow: "rgba(15,184,163,0.18)",
-          text: "#4ecdc4",
+          DEFAULT: "var(--accent)",
+          hover: "var(--accent-hover)",
+          text: "var(--accent-text)",
+          dim: "var(--accent-dim)",
+          glow: "var(--accent-glow)",
         },
-        ok: "#22c55e",
-        warn: "#f59e0b",
-        err: "#f87171",
-        info: "#60a5fa",
+        ai: {
+          DEFAULT: "var(--ai)",
+          dim: "var(--ai-dim)",
+          glow: "var(--ai-glow)",
+        },
+        ok: "var(--ok)",
+        warn: "var(--warn)",
+        err: "var(--err)",
+        info: "var(--info)",
       },
       borderColor: {
         subtle: "var(--border-subtle)",
         muted: "var(--border-muted)",
+        strong: "var(--border-strong)",
       },
       fontFamily: {
         sans: ['"Inter"', "system-ui", "sans-serif"],
-        mono: ['"IBM Plex Mono"', "monospace"],
+        mono: ['"IBM Plex Mono"', '"SF Mono"', "ui-monospace", "monospace"],
       },
       boxShadow: {
-        float:
-          "0 8px 32px rgba(0,0,0,0.52), 0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04)",
-        glow: "0 0 20px rgba(15,184,163,0.25)",
-        "glow-sm": "0 0 10px rgba(15,184,163,0.15)",
+        float: "var(--shadow-float)",
+        glow: "var(--shadow-glow)",
+        "glow-sm": "var(--shadow-glow-sm)",
+        ai: "var(--shadow-ai)",
       },
+      borderRadius: {
+        sm: "var(--radius-sm)",
+        md: "var(--radius-md)",
+        lg: "var(--radius-lg)",
+        xl: "var(--radius-xl)",
+        "2xl": "var(--radius-2xl)",
+      },
+      transitionTimingFunction: {
+        smooth: "var(--ease-out)",
+        "smooth-inout": "var(--ease-in-out)",
+      },
+      transitionDuration: {
+        fast: "120ms",
+        base: "220ms",
+        slow: "320ms",
+      },
+      /* v1 animations — kept alive for v1 screens (SetupView, SelectView,
+         GenerateView, ReviewView, ChatView) until they are rewritten in
+         Phase 4. New code should prefer the .animate-* classes in
+         styles/animations.css. */
       animation: {
         in: "fadeSlideUp 0.3s cubic-bezier(0.16,1,0.3,1) both",
         "in-fast": "fadeSlideUp 0.18s cubic-bezier(0.16,1,0.3,1) both",

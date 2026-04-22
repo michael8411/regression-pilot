@@ -549,6 +549,22 @@ Create the smallest set of high-value regression test cases that covers the real
     return json.loads(response.text)
 
 
+
+_GROUPING_MODEL = "gemini-2.5-flash-lite"
+
+def _build_grouping_ticket_view(tickets: list[dict]) -> list[dict]:
+    return [
+        {
+            "key": str(t.get("key", "")),
+            "summary": str(t.get("summary", ""))[:160],
+            "labels": t.get("labels") or [],
+            "components": t.get("components") or [],
+            "issue_type": str(t.get("issue_type", "")),
+        }
+        for t in tickets
+    ]
+
+
 async def group_tickets_semantic(tickets: list[dict]) -> dict:
     if not tickets:
         return {"groups": []}
@@ -561,17 +577,7 @@ async def group_tickets_semantic(tickets: list[dict]) -> dict:
     max_groups = 6
     target_groups = min(max_groups, max(min_groups, round(len(tickets) ** 0.5)))
 
-    ticket_view = [
-        {
-            "key": str(t.get("key", "")),
-            "summary": str(t.get("summary", "")),
-            "labels": t.get("labels") or [],
-            "components": t.get("components") or [],
-            "issue_type": str(t.get("issue_type", "")),
-            "description": str(t.get("description", ""))[:280],
-        }
-        for t in tickets
-    ]
+    ticket_view = _build_grouping_ticket_view(tickets)
 
     prompt = f"""Group these Jira tickets into pragmatic regression categories.
 
@@ -592,10 +598,9 @@ Tickets JSON:
 """
 
     client = _get_client()
-    prefs = read_preferences()
     try:
         response = await client.aio.models.generate_content(
-            model=prefs["ai_model"],
+            model=_GROUPING_MODEL,
             contents=prompt,
             config=types.GenerateContentConfig(
                 system_instruction=(
@@ -605,6 +610,7 @@ Tickets JSON:
                 response_mime_type="application/json",
                 response_schema=GROUP_TICKETS_SCHEMA,
                 temperature=0.2,
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
                 max_output_tokens=4096,
             ),
         )

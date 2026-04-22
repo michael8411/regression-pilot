@@ -1,0 +1,85 @@
+/* Shimmer — AIShimmer bars during streaming */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(167,139,250,0.15) 20%,
+    rgba(15,184,163,0.25)  50%,
+    rgba(167,139,250,0.15) 80%,
+    transparent           100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2.4s linear infinite;
+}
+
+/* Pulse dot — session chips, status indicators */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}
+.animate-pulse-dot {
+  animation: pulse-dot 1.8s ease-in-out infinite;
+}
+
+/* Glow pulse — confirmation on AI action */
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 0 rgba(15,184,163,0); }
+  50%      { box-shadow: 0 0 16px rgba(15,184,163,0.4); }
+}
+.animate-glow-pulse {
+  animation: glow-pulse 300ms ease-out;
+}
+
+/* Skeleton — loading placeholders */
+@keyframes skel {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 0.8; }
+}
+.animate-skeleton {
+  background: var(--surface-overlay);
+  animation: skel 1.6s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+/* Fade-in — screen mount */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fade-in var(--dur-base) var(--ease-out);
+}
+
+/* Slide-up — modals, drawers, overlays */
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-slide-up {
+  animation: slide-up var(--dur-slow) var(--ease-out) both;
+}
+
+/* Spin — loading indicator */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.animate-spin-fast {
+  animation: spin 0.8s linear infinite;
+}
+
+/* Respect OS reduced-motion preference — mandatory for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .animate-shimmer,
+  .animate-pulse-dot,
+  .animate-glow-pulse,
+  .animate-skeleton,
+  .animate-fade-in,
+  .animate-slide-up,
+  .animate-spin-fast {
+    animation: none !important;
+  }
+}

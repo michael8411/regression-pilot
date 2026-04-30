@@ -15,6 +15,7 @@ import {
   useGlobalCommandShortcut,
   useRegisterCommands,
 } from "@/components/shell";
+import { RegressionHome } from "@/components/regression";
 import { RouteProvider, useRoute } from "@/contexts/RouteContext";
 import {
   CommandRegistryProvider,
@@ -27,6 +28,7 @@ import {
   mapRouteToLegacyView,
   parseRoute,
   ROUTE_LABELS,
+  type RegressionScreen as RegressionScreenName,
   type Route,
   type SessionChipData,
 } from "@/types/routing";
@@ -416,43 +418,7 @@ function CurrentScreen({ handlers }: { handlers: ScreenHandlers }) {
   const ws = route[0];
 
   if (ws === "regression") {
-    switch (route[1]) {
-      case "home":
-        return <SetupView onStatusResolved={handlers.onStatusResolved} />;
-      case "workbench":
-        return (
-          <SelectView
-            onTicketsSelected={handlers.onTicketsSelected}
-            saveState={handlers.saveState}
-          />
-        );
-      case "generate":
-        return (
-          <GenerateView
-            tickets={handlers.tickets}
-            onGenerated={handlers.onGenerated}
-            onBack={handlers.onBackFromGenerate}
-            saveState={handlers.saveState}
-            initialInstructions={handlers.initialInstructions}
-            initialGroups={handlers.initialGroups}
-          />
-        );
-      case "review":
-        return (
-          <ReviewView
-            testCases={handlers.testCases}
-            projectKey={handlers.projectKey}
-            onBack={handlers.onBackFromReview}
-            onUpdateTestCases={handlers.onUpdateTestCases}
-            saveStateImmediate={handlers.saveStateImmediate}
-            initialPushResult={handlers.initialPushResult}
-          />
-        );
-      case "themes":
-        return <ComingSoon label={ROUTE_LABELS.regression.themes} description="Shipping in Phase 4." />;
-      case "cycles":
-        return <ComingSoon label={ROUTE_LABELS.regression.cycles} description="Shipping in Phase 10." />;
-    }
+    return <RegressionScreen screen={route[1]} handlers={handlers} />;
   }
 
   if (ws === "live") {
@@ -481,6 +447,81 @@ function CurrentScreen({ handlers }: { handlers: ScreenHandlers }) {
   }
 
   return <ComingSoon label="History" description="Shipping in Phase 5." />;
+}
+
+function RegressionScreen({
+  screen,
+  handlers,
+}: {
+  screen: RegressionScreenName;
+  handlers: ScreenHandlers;
+}) {
+  if (!isFeatureEnabled("regressionV2")) {
+    return <LegacyRegressionScreen screen={screen} handlers={handlers} />;
+  }
+  switch (screen) {
+    case "home":
+      return <RegressionHome />;
+    case "workbench":
+      return <ComingSoon label="Tickets Workbench" description="Shipping in Phase 4b." />;
+    case "themes":
+      return <ComingSoon label="Themes" description="Shipping in Phase 4c." />;
+    case "generate":
+      return <ComingSoon label="Generate" description="Shipping in Phase 4d." />;
+    case "review":
+      return <ComingSoon label="Review" description="Shipping in Phase 4e." />;
+    case "push":
+      return <ComingSoon label="Push" description="Shipping in Phase 4f." />;
+    case "cycles":
+      return <ComingSoon label="Test Cycles" description="Shipping in Phase 10." />;
+  }
+}
+
+function LegacyRegressionScreen({
+  screen,
+  handlers,
+}: {
+  screen: RegressionScreenName;
+  handlers: ScreenHandlers;
+}) {
+  switch (screen) {
+    case "home":
+      return <SetupView onStatusResolved={handlers.onStatusResolved} />;
+    case "workbench":
+      return (
+        <SelectView
+          onTicketsSelected={handlers.onTicketsSelected}
+          saveState={handlers.saveState}
+        />
+      );
+    case "generate":
+      return (
+        <GenerateView
+          tickets={handlers.tickets}
+          onGenerated={handlers.onGenerated}
+          onBack={handlers.onBackFromGenerate}
+          saveState={handlers.saveState}
+          initialInstructions={handlers.initialInstructions}
+          initialGroups={handlers.initialGroups}
+        />
+      );
+    case "review":
+    case "push":
+      return (
+        <ReviewView
+          testCases={handlers.testCases}
+          projectKey={handlers.projectKey}
+          onBack={handlers.onBackFromReview}
+          onUpdateTestCases={handlers.onUpdateTestCases}
+          saveStateImmediate={handlers.saveStateImmediate}
+          initialPushResult={handlers.initialPushResult}
+        />
+      );
+    case "themes":
+      return <ComingSoon label="Themes" description="Shipping in Phase 4." />;
+    case "cycles":
+      return <ComingSoon label="Test Cycles" description="Shipping in Phase 10." />;
+  }
 }
 
 function ComingSoon({ label, description }: { label: string; description?: string }) {

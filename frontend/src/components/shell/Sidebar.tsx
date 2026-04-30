@@ -56,7 +56,7 @@ function regressionContextItems(session: SessionChipData | null | undefined): Na
     items.push({
       label: "Current Session",
       icon: ClipboardList,
-      route: ["regression", "tickets"],
+      route: ["regression", "workbench"],
       sub: `${session.project} ${session.version}`,
     });
   }

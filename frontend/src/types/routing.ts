@@ -18,6 +18,7 @@ export type RegressionScreen =
   | "themes"
   | "generate"
   | "review"
+  | "push"
   | "cycles";
 
 export type LiveScreen = "home" | "board" | "pinned";
@@ -67,6 +68,7 @@ export const ROUTE_LABELS: {
     themes:    "Themes",
     generate:  "Generate",
     review:    "Review",
+    push:      "Push",
     cycles:    "Test Cycles",
   },
   live: {
@@ -86,7 +88,7 @@ export const ROUTE_LABELS: {
 };
 
 const VALID_REGRESSION: RegressionScreen[] =
-  ["home", "workbench", "themes", "generate", "review", "cycles"];
+  ["home", "workbench", "themes", "generate", "review", "push", "cycles"];
 const VALID_LIVE:      LiveScreen[]      = ["home", "board", "pinned"];
 const VALID_ASSISTANT: AssistantScreen[] = ["home", "chat"];
 const VALID_OVERLAYS:  OverlayScreen[]   = ["settings", "onboarding", "history"];
@@ -131,9 +133,10 @@ export function mapRouteToLegacyView(route: Route): AppView | null {
       case "home":      return "setup";
       case "workbench": return "select";
       case "themes":    return "select";
-      case "generate": return "generate";
-      case "review":   return "review";
-      case "cycles":   return null;
+      case "generate":  return "generate";
+      case "review":    return "review";
+      case "push":      return "review";
+      case "cycles":    return null;
     }
   }
   if (route[0] === "assistant") {

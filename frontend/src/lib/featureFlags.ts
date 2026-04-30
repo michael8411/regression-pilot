@@ -1,6 +1,7 @@
 export type FeatureFlag =
   | "workspaceSwitcher"
   | "commandPalette"
+  | "regressionV2"
   | "historyDrawer"
   | "onboardingV2"
   | "assistantV2"
@@ -12,6 +13,7 @@ export type FeatureFlag =
 const DEFAULTS: Record<FeatureFlag, boolean> = {
   workspaceSwitcher: false,
   commandPalette: false,
+  regressionV2: false,
   historyDrawer: false,
   onboardingV2: false,
   assistantV2: false,

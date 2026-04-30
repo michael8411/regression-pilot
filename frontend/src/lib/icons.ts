@@ -76,5 +76,5 @@ export {
   Zap,
 } from "lucide-react";
 
-import type { FC, SVGProps } from "react";
-export type IconComponent = FC<SVGProps<SVGSVGElement>>;
+import type { LucideIcon } from "lucide-react";
+export type IconComponent = LucideIcon;

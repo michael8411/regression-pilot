@@ -1,2 +1,3 @@
 export { RegressionHome } from "./RegressionHome";
-// 4b–4f add their exports here as they land.
+export { TicketWorkbench } from "./TicketWorkbench";
+// 4c–4f add their exports here as they land.

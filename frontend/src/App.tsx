@@ -15,7 +15,7 @@ import {
   useGlobalCommandShortcut,
   useRegisterCommands,
 } from "@/components/shell";
-import { RegressionHome, TicketWorkbench } from "@/components/regression";
+import { RegressionHome, TicketWorkbench, ThemeEditor } from "@/components/regression";
 import { RouteProvider, useRoute } from "@/contexts/RouteContext";
 import {
   CommandRegistryProvider,
@@ -465,7 +465,7 @@ function RegressionScreen({
     case "workbench":
       return <TicketWorkbench />;
     case "themes":
-      return <ComingSoon label="Themes" description="Shipping in Phase 4c." />;
+      return <ThemeEditor />;
     case "generate":
       return <ComingSoon label="Generate" description="Shipping in Phase 4d." />;
     case "review":
@@ -494,7 +494,10 @@ function LegacyRegressionScreen({
           saveState={handlers.saveState}
         />
       );
+    case "themes":
     case "generate":
+      // v1 had no separate themes screen — grouping and generation
+      // both lived in GenerateView. Both legacy routes resolve there.
       return (
         <GenerateView
           tickets={handlers.tickets}
@@ -517,8 +520,6 @@ function LegacyRegressionScreen({
           initialPushResult={handlers.initialPushResult}
         />
       );
-    case "themes":
-      return <ComingSoon label="Themes" description="Shipping in Phase 4." />;
     case "cycles":
       return <ComingSoon label="Test Cycles" description="Shipping in Phase 10." />;
   }

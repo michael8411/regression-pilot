@@ -15,7 +15,12 @@ import {
   useGlobalCommandShortcut,
   useRegisterCommands,
 } from "@/components/shell";
-import { RegressionHome, TicketWorkbench, ThemeEditor } from "@/components/regression";
+import {
+  RegressionHome,
+  TicketWorkbench,
+  ThemeEditor,
+  GenerateCases,
+} from "@/components/regression";
 import { RouteProvider, useRoute } from "@/contexts/RouteContext";
 import {
   CommandRegistryProvider,
@@ -467,7 +472,7 @@ function RegressionScreen({
     case "themes":
       return <ThemeEditor />;
     case "generate":
-      return <ComingSoon label="Generate" description="Shipping in Phase 4d." />;
+      return <GenerateCases />;
     case "review":
       return <ComingSoon label="Review" description="Shipping in Phase 4e." />;
     case "push":

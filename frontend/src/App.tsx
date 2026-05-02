@@ -21,6 +21,7 @@ import {
   ThemeEditor,
   GenerateCases,
   ReviewGrid,
+  PushDialog,
 } from "@/components/regression";
 import { RouteProvider, useRoute } from "@/contexts/RouteContext";
 import {
@@ -477,7 +478,7 @@ function RegressionScreen({
     case "review":
       return <ReviewGrid />;
     case "push":
-      return <ComingSoon label="Push" description="Shipping in Phase 4f." />;
+      return <PushDialog />;
     case "cycles":
       return <ComingSoon label="Test Cycles" description="Shipping in Phase 10." />;
   }

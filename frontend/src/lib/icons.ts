@@ -9,6 +9,7 @@
 
 export {
   Activity,
+  AlertTriangle,
   ArrowDown,
   ArrowLeft,
   ArrowRight,
@@ -18,6 +19,7 @@ export {
   Bug,
   Calendar,
   Check,
+  CheckCircle2,
   CheckSquare,
   ChevronDown,
   ChevronRight,

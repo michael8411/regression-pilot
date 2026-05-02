@@ -9,6 +9,7 @@
 
 export {
   Activity,
+  ArrowDown,
   ArrowLeft,
   ArrowRight,
   ArrowRightCircle,

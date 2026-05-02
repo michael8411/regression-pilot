@@ -20,6 +20,7 @@ import {
   TicketWorkbench,
   ThemeEditor,
   GenerateCases,
+  ReviewGrid,
 } from "@/components/regression";
 import { RouteProvider, useRoute } from "@/contexts/RouteContext";
 import {
@@ -474,7 +475,7 @@ function RegressionScreen({
     case "generate":
       return <GenerateCases />;
     case "review":
-      return <ComingSoon label="Review" description="Shipping in Phase 4e." />;
+      return <ReviewGrid />;
     case "push":
       return <ComingSoon label="Push" description="Shipping in Phase 4f." />;
     case "cycles":

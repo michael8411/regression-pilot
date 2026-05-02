@@ -71,6 +71,15 @@
   animation: spin 0.8s linear infinite;
 }
 
+/* Slide-in-right — side drawers (review editor, etc.) */
+@keyframes slide-in-right {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+.animate-slide-in-right {
+  animation: slide-in-right var(--dur-base) var(--ease-out) both;
+}
+
 /* Respect OS reduced-motion preference — mandatory for accessibility */
 @media (prefers-reduced-motion: reduce) {
   .animate-shimmer,
@@ -79,6 +88,7 @@
   .animate-skeleton,
   .animate-fade-in,
   .animate-slide-up,
+  .animate-slide-in-right,
   .animate-spin-fast {
     animation: none !important;
   }

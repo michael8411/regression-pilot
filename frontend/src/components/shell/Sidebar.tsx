@@ -15,6 +15,7 @@ import {
 } from "@/lib/icons";
 import { useRoute } from "@/contexts/RouteContext";
 import { useKeyboardShortcut } from "@/hooks/useKeyboardShortcut";
+import { isFeatureEnabled } from "@/lib/featureFlags";
 import { routeEq, type Route, type SessionChipData, type Workspace } from "@/types/routing";
 
 export interface SidebarProps {
@@ -107,7 +108,9 @@ export function Sidebar({
 
       <div className="t-label px-2 pt-2 pb-1">Workspace</div>
       <nav className="flex flex-col gap-0.5">
-        {WORKSPACES.map((w) => {
+        {WORKSPACES.filter(
+          (w) => w.id !== "live" || isFeatureEnabled("liveTestingV2"),
+        ).map((w) => {
           const Icon = w.icon;
           const active = workspace === w.id;
           return (

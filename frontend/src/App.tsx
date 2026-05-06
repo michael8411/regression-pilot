@@ -26,6 +26,7 @@ import {
 import { HistoryDrawer } from "@/components/history";
 import { SetupWizard } from "@/components/onboarding";
 import { AssistantWorkspace } from "@/components/assistant";
+import { LiveWorkspace } from "@/components/live";
 import { getConfigStatus } from "@/lib/api";
 import { RouteProvider, useRoute } from "@/contexts/RouteContext";
 import {
@@ -38,7 +39,6 @@ import {
   legacyViewToRoute,
   mapRouteToLegacyView,
   parseRoute,
-  ROUTE_LABELS,
   type RegressionScreen as RegressionScreenName,
   type Route,
   type SessionChipData,
@@ -473,7 +473,14 @@ function CurrentScreen({ handlers }: { handlers: ScreenHandlers }) {
   }
 
   if (ws === "live") {
-    return <ComingSoon label={ROUTE_LABELS.workspace.live} description="Shipping in Phase 8." />;
+    if (isFeatureEnabled("liveTestingV2")) {
+      return <LiveWorkspace />;
+    }
+    return (
+      <div className="p-8 text-center text-[12px] text-ink-faint">
+        Live Testing isn't enabled.
+      </div>
+    );
   }
 
   if (ws === "assistant") {

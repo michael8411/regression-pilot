@@ -25,6 +25,8 @@ interface RouteActions {
   back: () => void;
   /** Close an overlay and return to the last non-overlay route. */
   closeOverlay: () => void;
+  /** Navigate directly to a specific conversation. */
+  gotoConversation: (conversationId: string) => void;
 }
 
 type RouteContextValue = RouteState & RouteActions;
@@ -92,6 +94,11 @@ export function RouteProvider({
     goto(lastNonOverlayRef.current);
   }, [goto]);
 
+  const gotoConversation = useCallback(
+    (id: string) => goto(["assistant", "conversation", id]),
+    [goto],
+  );
+
   const value = useMemo<RouteContextValue>(
     () => ({
       route,
@@ -101,8 +108,9 @@ export function RouteProvider({
       gotoWorkspace,
       back,
       closeOverlay,
+      gotoConversation,
     }),
-    [route, goto, gotoWorkspace, back, closeOverlay],
+    [route, goto, gotoWorkspace, back, closeOverlay, gotoConversation],
   );
 
   return <RouteContext.Provider value={value}>{children}</RouteContext.Provider>;

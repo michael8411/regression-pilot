@@ -25,6 +25,7 @@ import {
 } from "@/components/regression";
 import { HistoryDrawer } from "@/components/history";
 import { SetupWizard } from "@/components/onboarding";
+import { AssistantWorkspace } from "@/components/assistant";
 import { getConfigStatus } from "@/lib/api";
 import { RouteProvider, useRoute } from "@/contexts/RouteContext";
 import {
@@ -476,16 +477,16 @@ function CurrentScreen({ handlers }: { handlers: ScreenHandlers }) {
   }
 
   if (ws === "assistant") {
-    if (route[1] === "chat") {
-      return (
-        <ChatView
-          tickets={handlers.tickets}
-          saveStateImmediate={handlers.saveStateImmediate}
-          initialMessages={handlers.initialMessages}
-        />
-      );
+    if (isFeatureEnabled("assistantV2")) {
+      return <AssistantWorkspace />;
     }
-    return <ComingSoon label="Assistant Home" description="Shipping in Phase 7." />;
+    return (
+      <ChatView
+        tickets={handlers.tickets}
+        saveStateImmediate={handlers.saveStateImmediate}
+        initialMessages={handlers.initialMessages}
+      />
+    );
   }
 
   if (ws === "settings") {

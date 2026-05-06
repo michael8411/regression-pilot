@@ -10,6 +10,8 @@
 export {
   Activity,
   AlertTriangle,
+  Archive,
+  ArchiveRestore,
   ArrowDown,
   ArrowLeft,
   ArrowRight,
@@ -60,6 +62,7 @@ export {
   Paperclip,
   Pencil,
   Pin,
+  PinOff,
   Play,
   Plug,
   PlugZap,

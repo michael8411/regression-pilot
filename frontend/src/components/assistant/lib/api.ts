@@ -1,0 +1,130 @@
+import type {
+  AppendMessageResponse,
+  Attachment,
+  AttachmentKind,
+  Conversation,
+  ConversationWithMessages,
+  MessageRole,
+} from "@/types/conversations";
+
+const BASE =
+  (import.meta.env.VITE_API_BASE as string | undefined) ?? "http://127.0.0.1:8000";
+
+async function jfetch<T>(input: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${BASE}${input}`, {
+    headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
+    ...init,
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`${res.status} ${res.statusText}: ${detail.slice(0, 200)}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+export function listConversations(includeArchived = false): Promise<Conversation[]> {
+  const q = includeArchived ? "?includeArchived=true" : "";
+  return jfetch<Conversation[]>(`/conversations${q}`);
+}
+
+export function createConversation(title?: string): Promise<Conversation> {
+  return jfetch<Conversation>("/conversations", {
+    method: "POST",
+    body: JSON.stringify({ title }),
+  });
+}
+
+export function getConversation(id: string): Promise<ConversationWithMessages> {
+  return jfetch<ConversationWithMessages>(
+    `/conversations/${encodeURIComponent(id)}`,
+  );
+}
+
+export function patchConversation(
+  id: string,
+  patch: Partial<Pick<Conversation, "title" | "pinned" | "archived">>,
+): Promise<Conversation> {
+  return jfetch<Conversation>(`/conversations/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+}
+
+export function deleteConversation(id: string): Promise<{ deleted: boolean }> {
+  return jfetch<{ deleted: boolean }>(`/conversations/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
+export function appendMessage(
+  id: string,
+  body: { role: MessageRole; content: string; meta?: Record<string, unknown> },
+): Promise<AppendMessageResponse> {
+  return jfetch<AppendMessageResponse>(
+    `/conversations/${encodeURIComponent(id)}/messages`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+}
+
+export function addAttachment(
+  id: string,
+  body: { kind: AttachmentKind; ref: string },
+): Promise<Attachment> {
+  return jfetch<Attachment>(
+    `/conversations/${encodeURIComponent(id)}/attachments`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+}
+
+export function removeAttachment(
+  id: string,
+  aid: string,
+): Promise<{ deleted: boolean }> {
+  return jfetch<{ deleted: boolean }>(
+    `/conversations/${encodeURIComponent(id)}/attachments/${encodeURIComponent(aid)}`,
+    { method: "DELETE" },
+  );
+}
+
+/** Stream an assistant reply. Yields raw SSE event objects. */
+export async function* streamAssistantReply(
+  id: string,
+  signal?: AbortSignal,
+): AsyncGenerator<{
+  text?: string;
+  done?: boolean;
+  error?: string;
+  message_id?: string;
+}> {
+  const res = await fetch(
+    `${BASE}/conversations/${encodeURIComponent(id)}/messages/stream`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+      signal,
+    },
+  );
+  if (!res.ok || !res.body) {
+    throw new Error(`Stream failed: ${res.status}`);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const events = buffer.split("\n\n");
+    buffer = events.pop() ?? "";
+    for (const evt of events) {
+      const line = evt.split("\n").find((l) => l.startsWith("data: "));
+      if (!line) continue;
+      try {
+        yield JSON.parse(line.slice(6));
+      } catch {
+        // skip malformed line; do not log content
+      }
+    }
+  }
+}

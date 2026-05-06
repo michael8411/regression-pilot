@@ -1,16 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRoute } from "@/contexts/RouteContext";
 import { LiveHome } from "./LiveHome";
-import { BoardProvider } from "./BoardProvider";
+import { BoardProvider, useBoard } from "./BoardProvider";
 import { KanbanBoard } from "./KanbanBoard";
 import { PinnedBoard } from "./PinnedBoard";
+import { TicketDrawer } from "./TicketDrawer";
 
 export function LiveWorkspace() {
   const { route } = useRoute();
-  // openKey is intentionally declared even though TicketDrawer (8d) is not
-  // mounted yet — keeps the closure stable so 8d can drop in without
-  // restructuring this component.
-  const [, setOpenKey] = useState<string | null>(null);
+  const [openKey, setOpenKey] = useState<string | null>(null);
 
   if (route[0] !== "live") return null;
 
@@ -21,9 +19,7 @@ export function LiveWorkspace() {
   if (route[1] === "board") {
     return (
       <BoardProvider boardId={route[2]}>
-        <div className="relative h-full">
-          <KanbanBoard onOpenTicket={(k) => setOpenKey(k)} />
-        </div>
+        <BoardWithDrawer openKey={openKey} setOpenKey={setOpenKey} />
       </BoardProvider>
     );
   }
@@ -32,9 +28,45 @@ export function LiveWorkspace() {
     return (
       <div className="relative h-full">
         <PinnedBoard onOpenTicket={(k) => setOpenKey(k)} />
+        {openKey && (
+          <TicketDrawer
+            ticketKey={openKey}
+            onClose={() => setOpenKey(null)}
+          />
+        )}
       </div>
     );
   }
 
   return null;
+}
+
+function BoardWithDrawer({
+  openKey,
+  setOpenKey,
+}: {
+  openKey: string | null;
+  setOpenKey: (k: string | null) => void;
+}) {
+  const board = useBoard();
+
+  useEffect(() => {
+    if (openKey) {
+      board.pausePolling();
+      return () => board.resumePolling();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openKey]);
+
+  return (
+    <div className="relative h-full">
+      <KanbanBoard onOpenTicket={(k) => setOpenKey(k)} />
+      {openKey && (
+        <TicketDrawer
+          ticketKey={openKey}
+          onClose={() => setOpenKey(null)}
+        />
+      )}
+    </div>
+  );
 }

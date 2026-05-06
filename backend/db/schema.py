@@ -62,3 +62,20 @@ CREATE_ATTACHMENTS_INDEX = """
 CREATE INDEX IF NOT EXISTS idx_attachments_convo
     ON attachments (conversation_id)
 """
+
+CREATE_LIVE_BOARDS_TABLE = """
+CREATE TABLE IF NOT EXISTS live_boards (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL,
+    jql         TEXT NOT NULL,
+    columns     TEXT NOT NULL DEFAULT '[]',
+    pinned      INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+)
+"""
+
+CREATE_LIVE_BOARDS_INDEX = """
+CREATE INDEX IF NOT EXISTS idx_live_boards_pinned_updated
+    ON live_boards (pinned DESC, updated_at DESC)
+"""

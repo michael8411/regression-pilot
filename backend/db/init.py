@@ -10,6 +10,8 @@ try:
         CREATE_MESSAGES_INDEX,
         CREATE_ATTACHMENTS_TABLE,
         CREATE_ATTACHMENTS_INDEX,
+        CREATE_LIVE_BOARDS_TABLE,
+        CREATE_LIVE_BOARDS_INDEX,
     )
     from backend.utils.crypto import encrypt_value, get_encryptor
 except ImportError:  # pragma: no cover - supports running from backend/ as script
@@ -22,6 +24,8 @@ except ImportError:  # pragma: no cover - supports running from backend/ as scri
         CREATE_MESSAGES_INDEX,
         CREATE_ATTACHMENTS_TABLE,
         CREATE_ATTACHMENTS_INDEX,
+        CREATE_LIVE_BOARDS_TABLE,
+        CREATE_LIVE_BOARDS_INDEX,
     )
     from utils.crypto import encrypt_value, get_encryptor
 
@@ -42,6 +46,8 @@ async def init_db() -> None:
         await db.execute(CREATE_MESSAGES_INDEX)
         await db.execute(CREATE_ATTACHMENTS_TABLE)
         await db.execute(CREATE_ATTACHMENTS_INDEX)
+        await db.execute(CREATE_LIVE_BOARDS_TABLE)
+        await db.execute(CREATE_LIVE_BOARDS_INDEX)
         await db.commit()
 
         get_encryptor()

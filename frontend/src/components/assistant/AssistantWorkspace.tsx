@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { MessageSquarePlus } from "@/lib/icons";
 import { ConversationList } from "./ConversationList";
 import { ConversationProvider } from "./ConversationProvider";
+import { ConversationThread } from "./ConversationThread";
 import { useRoute } from "@/contexts/RouteContext";
 import {
   useRegisterCommand,
@@ -42,7 +43,7 @@ export function AssistantWorkspace() {
         </div>
         <div className="flex-1 flex flex-col min-w-0 bg-surface">
           {conversationId ? (
-            <ThreadPlaceholder conversationId={conversationId} />
+            <ConversationThread />
           ) : (
             <NoConversationSelected />
           )}
@@ -75,14 +76,6 @@ function NoConversationSelected() {
         Select a conversation on the left, or start a new one to chat about
         regression strategy, ticket coverage, or generated test cases.
       </div>
-    </div>
-  );
-}
-
-function ThreadPlaceholder({ conversationId }: { conversationId: string }) {
-  return (
-    <div className="p-4 text-[12px] text-ink-faint">
-      Thread for <code>{conversationId}</code> arrives in Phase 7c.
     </div>
   );
 }

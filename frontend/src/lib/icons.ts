@@ -9,6 +9,7 @@
 
 export {
   Activity,
+  AlertCircle,
   AlertTriangle,
   Archive,
   ArchiveRestore,
@@ -72,6 +73,7 @@ export {
   Search,
   Send,
   Settings,
+  ShieldAlert,
   ShieldCheck,
   Slash,
   SlidersHorizontal,

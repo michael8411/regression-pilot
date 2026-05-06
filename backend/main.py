@@ -13,6 +13,7 @@ try:
     from backend.api.jira_routes import router as jira_router
     from backend.api.zephyr_routes import router as zephyr_router
     from backend.api.session_routes import router as session_router
+    from backend.api.conversation_routes import router as conversation_router
     from backend.config.logging_config import setup_logging
     from backend.config.settings import get_settings
     from backend.db.init import init_db
@@ -25,6 +26,7 @@ except ImportError:  # pragma: no cover - supports running from backend/ as scri
     from api.jira_routes import router as jira_router
     from api.zephyr_routes import router as zephyr_router
     from api.session_routes import router as session_router
+    from api.conversation_routes import router as conversation_router
     from config.logging_config import setup_logging
     from config.settings import get_settings
     from db.init import init_db
@@ -83,6 +85,7 @@ app.include_router(jira_router)
 app.include_router(ai_router)
 app.include_router(zephyr_router)
 app.include_router(session_router)
+app.include_router(conversation_router)
 
 if __name__ == "__main__":
     import uvicorn

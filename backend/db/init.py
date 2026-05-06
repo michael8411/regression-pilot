@@ -2,11 +2,27 @@ import structlog
 
 try:
     from backend.db.connection import get_connection
-    from backend.db.schema import CREATE_SESSIONS_TABLE, CREATE_SESSION_STATE_TABLE
+    from backend.db.schema import (
+        CREATE_SESSIONS_TABLE,
+        CREATE_SESSION_STATE_TABLE,
+        CREATE_CONVERSATIONS_TABLE,
+        CREATE_MESSAGES_TABLE,
+        CREATE_MESSAGES_INDEX,
+        CREATE_ATTACHMENTS_TABLE,
+        CREATE_ATTACHMENTS_INDEX,
+    )
     from backend.utils.crypto import encrypt_value, get_encryptor
 except ImportError:  # pragma: no cover - supports running from backend/ as script
     from db.connection import get_connection
-    from db.schema import CREATE_SESSIONS_TABLE, CREATE_SESSION_STATE_TABLE
+    from db.schema import (
+        CREATE_SESSIONS_TABLE,
+        CREATE_SESSION_STATE_TABLE,
+        CREATE_CONVERSATIONS_TABLE,
+        CREATE_MESSAGES_TABLE,
+        CREATE_MESSAGES_INDEX,
+        CREATE_ATTACHMENTS_TABLE,
+        CREATE_ATTACHMENTS_INDEX,
+    )
     from utils.crypto import encrypt_value, get_encryptor
 
 
@@ -21,6 +37,11 @@ async def init_db() -> None:
         await db.execute("PRAGMA journal_mode = WAL")
         await db.execute(CREATE_SESSIONS_TABLE)
         await db.execute(CREATE_SESSION_STATE_TABLE)
+        await db.execute(CREATE_CONVERSATIONS_TABLE)
+        await db.execute(CREATE_MESSAGES_TABLE)
+        await db.execute(CREATE_MESSAGES_INDEX)
+        await db.execute(CREATE_ATTACHMENTS_TABLE)
+        await db.execute(CREATE_ATTACHMENTS_INDEX)
         await db.commit()
 
         get_encryptor()

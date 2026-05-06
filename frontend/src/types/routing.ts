@@ -2,7 +2,8 @@
  * Route model for the v2 UI overhaul.
  *
  * The route is a discriminated tuple: [Workspace, Screen] for workspaces,
- * or [OverlayScreen] for overlays that render above the shell.
+ * [OverlayScreen] for overlays, or the 3-tuple ["assistant", "conversation", id]
+ * for a specific conversation.
  *
  * Adding a new screen is a pure type change here plus a render branch in
  * the workspace's screen switch. No parallel string unions to keep in sync.
@@ -23,7 +24,7 @@ export type RegressionScreen =
 
 export type LiveScreen = "home" | "board" | "pinned";
 
-export type AssistantScreen = "home" | "chat";
+export type AssistantScreen = "home" | "conversation";
 
 /** Screens that exist outside any workspace — rendered over the shell. */
 export type OverlayScreen = "settings" | "onboarding" | "history";
@@ -31,7 +32,8 @@ export type OverlayScreen = "settings" | "onboarding" | "history";
 export type Route =
   | ["regression", RegressionScreen]
   | ["live", LiveScreen]
-  | ["assistant", AssistantScreen]
+  | ["assistant", "home"]
+  | ["assistant", "conversation", string]
   | [OverlayScreen];
 
 /** Tuple equality helper — used by nav highlighting and effect deps. */
@@ -77,8 +79,8 @@ export const ROUTE_LABELS: {
     pinned: "Pinned",
   },
   assistant: {
-    home: "Home",
-    chat: "Conversation",
+    home:         "Home",
+    conversation: "Conversation",
   },
   overlay: {
     settings:   "Settings",
@@ -90,7 +92,6 @@ export const ROUTE_LABELS: {
 const VALID_REGRESSION: RegressionScreen[] =
   ["home", "workbench", "themes", "generate", "review", "push", "cycles"];
 const VALID_LIVE:      LiveScreen[]      = ["home", "board", "pinned"];
-const VALID_ASSISTANT: AssistantScreen[] = ["home", "chat"];
 const VALID_OVERLAYS:  OverlayScreen[]   = ["settings", "onboarding", "history"];
 
 /** Defensive parser for session-restored routes. Returns null on any deviation. */
@@ -108,8 +109,16 @@ export function parseRoute(raw: unknown): Route | null {
       return ["regression", b as RegressionScreen];
     if (a === "live" && (VALID_LIVE as string[]).includes(b))
       return ["live", b as LiveScreen];
-    if (a === "assistant" && (VALID_ASSISTANT as string[]).includes(b))
-      return ["assistant", b as AssistantScreen];
+    if (a === "assistant" && b === "home")
+      return ["assistant", "home"];
+  }
+  if (
+    raw.length === 3 &&
+    a === "assistant" &&
+    b === "conversation" &&
+    typeof raw[2] === "string"
+  ) {
+    return ["assistant", "conversation", raw[2]];
   }
   return null;
 }
@@ -121,7 +130,7 @@ export function legacyViewToRoute(v?: AppView): Route | null {
     case "select":   return ["regression", "workbench"];
     case "generate": return ["regression", "generate"];
     case "review":   return ["regression", "review"];
-    case "chat":     return ["assistant", "chat"];
+    case "chat":     return ["assistant", "home"];
     default:         return null;
   }
 }
@@ -140,7 +149,8 @@ export function mapRouteToLegacyView(route: Route): AppView | null {
     }
   }
   if (route[0] === "assistant") {
-    if (route[1] === "chat") return "chat";
+    if (route[1] === "home")         return "chat";
+    if (route[1] === "conversation") return "chat";
   }
   return null;
 }
@@ -159,11 +169,14 @@ export function buildCrumbs(route: Route): string[] {
   if (route.length === 1) {
     return [ROUTE_LABELS.overlay[route[0]]];
   }
-  const [ws, screen] = route;
+  const ws = route[0];
   const wsLabel = ROUTE_LABELS.workspace[ws];
-  const screenLabel =
-    ws === "regression" ? ROUTE_LABELS.regression[screen as RegressionScreen]
-    : ws === "live"      ? ROUTE_LABELS.live[screen as LiveScreen]
-    : ROUTE_LABELS.assistant[screen as AssistantScreen];
-  return [wsLabel, screenLabel];
+  if (ws === "regression") {
+    return [wsLabel, ROUTE_LABELS.regression[route[1]]];
+  }
+  if (ws === "live") {
+    return [wsLabel, ROUTE_LABELS.live[route[1]]];
+  }
+  if (route[1] === "home") return [wsLabel, "Conversations"];
+  return [wsLabel, "Conversation"];
 }

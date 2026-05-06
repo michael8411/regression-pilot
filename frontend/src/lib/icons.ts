@@ -81,6 +81,7 @@ export {
   SlidersHorizontal,
   Sparkles,
   Square,
+  Tag,
   Terminal,
   Ticket,
   Trash2,

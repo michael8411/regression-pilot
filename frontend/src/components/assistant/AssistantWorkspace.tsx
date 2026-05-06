@@ -3,6 +3,7 @@ import { MessageSquarePlus } from "@/lib/icons";
 import { ConversationList } from "./ConversationList";
 import { ConversationProvider } from "./ConversationProvider";
 import { ConversationThread } from "./ConversationThread";
+import { ContextPicker } from "./ContextPicker";
 import { useRoute } from "@/contexts/RouteContext";
 import {
   useRegisterCommand,
@@ -50,7 +51,7 @@ export function AssistantWorkspace() {
         </div>
         {conversationId && (
           <div className="w-[280px] shrink-0 border-l border-subtle bg-surface">
-            <ContextPickerPlaceholder />
+            <ContextPicker />
           </div>
         )}
       </div>
@@ -80,10 +81,3 @@ function NoConversationSelected() {
   );
 }
 
-function ContextPickerPlaceholder() {
-  return (
-    <div className="p-4 text-[12px] text-ink-faint">
-      Context picker arrives in Phase 7d.
-    </div>
-  );
-}

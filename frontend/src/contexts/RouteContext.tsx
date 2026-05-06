@@ -27,6 +27,8 @@ interface RouteActions {
   closeOverlay: () => void;
   /** Navigate directly to a specific conversation. */
   gotoConversation: (conversationId: string) => void;
+  /** Navigate directly to a Live board. */
+  gotoBoard: (boardId: string) => void;
 }
 
 type RouteContextValue = RouteState & RouteActions;
@@ -99,6 +101,11 @@ export function RouteProvider({
     [goto],
   );
 
+  const gotoBoard = useCallback(
+    (id: string) => goto(["live", "board", id]),
+    [goto],
+  );
+
   const value = useMemo<RouteContextValue>(
     () => ({
       route,
@@ -109,8 +116,9 @@ export function RouteProvider({
       back,
       closeOverlay,
       gotoConversation,
+      gotoBoard,
     }),
-    [route, goto, gotoWorkspace, back, closeOverlay, gotoConversation],
+    [route, goto, gotoWorkspace, back, closeOverlay, gotoConversation, gotoBoard],
   );
 
   return <RouteContext.Provider value={value}>{children}</RouteContext.Provider>;

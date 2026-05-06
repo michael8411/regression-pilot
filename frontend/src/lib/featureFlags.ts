@@ -5,7 +5,7 @@ export type FeatureFlag =
   | "historyDrawer"
   | "onboardingV2"
   | "assistantV2"
-  | "liveTesting"
+  | "liveTestingV2"
   | "mcpIntegration"
   | "testCycles"
   | "lightTheme";
@@ -17,7 +17,7 @@ const DEFAULTS: Record<FeatureFlag, boolean> = {
   historyDrawer: false,
   onboardingV2: false,
   assistantV2: false,
-  liveTesting: false,
+  liveTestingV2: false,
   mcpIntegration: false,
   testCycles: false,
   lightTheme: true, // keep the old light theme available while refactoring

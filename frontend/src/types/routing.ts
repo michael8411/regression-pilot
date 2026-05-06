@@ -31,7 +31,9 @@ export type OverlayScreen = "settings" | "onboarding" | "history";
 
 export type Route =
   | ["regression", RegressionScreen]
-  | ["live", LiveScreen]
+  | ["live", "home"]
+  | ["live", "board", string]
+  | ["live", "pinned"]
   | ["assistant", "home"]
   | ["assistant", "conversation", string]
   | [OverlayScreen];
@@ -91,7 +93,6 @@ export const ROUTE_LABELS: {
 
 const VALID_REGRESSION: RegressionScreen[] =
   ["home", "workbench", "themes", "generate", "review", "push", "cycles"];
-const VALID_LIVE:      LiveScreen[]      = ["home", "board", "pinned"];
 const VALID_OVERLAYS:  OverlayScreen[]   = ["settings", "onboarding", "history"];
 
 /** Defensive parser for session-restored routes. Returns null on any deviation. */
@@ -107,18 +108,18 @@ export function parseRoute(raw: unknown): Route | null {
   if (raw.length === 2 && typeof b === "string") {
     if (a === "regression" && (VALID_REGRESSION as string[]).includes(b))
       return ["regression", b as RegressionScreen];
-    if (a === "live" && (VALID_LIVE as string[]).includes(b))
-      return ["live", b as LiveScreen];
+    if (a === "live" && b === "home")    return ["live", "home"];
+    if (a === "live" && b === "pinned")  return ["live", "pinned"];
     if (a === "assistant" && b === "home")
       return ["assistant", "home"];
   }
-  if (
-    raw.length === 3 &&
-    a === "assistant" &&
-    b === "conversation" &&
-    typeof raw[2] === "string"
-  ) {
-    return ["assistant", "conversation", raw[2]];
+  if (raw.length === 3 && typeof raw[2] === "string") {
+    if (a === "assistant" && b === "conversation") {
+      return ["assistant", "conversation", raw[2]];
+    }
+    if (a === "live" && b === "board") {
+      return ["live", "board", raw[2]];
+    }
   }
   return null;
 }
@@ -152,6 +153,10 @@ export function mapRouteToLegacyView(route: Route): AppView | null {
     if (route[1] === "home")         return "chat";
     if (route[1] === "conversation") return "chat";
   }
+  if (route[0] === "live") {
+    // No legacy view exists for Live Testing.
+    return null;
+  }
   return null;
 }
 
@@ -175,7 +180,9 @@ export function buildCrumbs(route: Route): string[] {
     return [wsLabel, ROUTE_LABELS.regression[route[1]]];
   }
   if (ws === "live") {
-    return [wsLabel, ROUTE_LABELS.live[route[1]]];
+    if (route[1] === "home")   return [wsLabel, "Boards"];
+    if (route[1] === "board")  return [wsLabel, "Board"];
+    return [wsLabel, "Pinned"];
   }
   if (route[1] === "home") return [wsLabel, "Conversations"];
   return [wsLabel, "Conversation"];

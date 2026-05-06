@@ -1,4 +1,5 @@
 import type { ConversationContextValue } from "@/components/assistant/ConversationProvider";
+import { isLikelyJiraKey } from "@/components/assistant/lib/attachmentUtils";
 
 export interface SlashCommandContext {
   conversation: ConversationContextValue;
@@ -52,15 +53,21 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     args: "<TICKET-KEY>",
     description: "Attach a Jira ticket to this conversation.",
     run: async (args, { attachments, composer }) => {
-      const key = args.trim();
-      if (!key || !attachments) return false;
-      try {
-        await attachments.addByKey(key);
+      const key = args.trim().toUpperCase();
+      // Always consume so the raw "/attach …" text is never sent as a chat
+      // message, even when the key is malformed or the attachments handle is
+      // unavailable.
+      if (!key || !isLikelyJiraKey(key) || !attachments) {
         composer.setValue("");
         return true;
-      } catch {
-        return false;
       }
+      try {
+        await attachments.addByKey(key);
+      } catch {
+        /* swallow — the picker stays the source of truth for errors */
+      }
+      composer.setValue("");
+      return true;
     },
   },
 ];

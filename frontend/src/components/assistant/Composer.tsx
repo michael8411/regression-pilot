@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { Loader2, Send, Square } from "@/lib/icons";
 import { useConversation } from "@/components/assistant/ConversationProvider";
 import { useThreadController } from "@/components/assistant/hooks/useThreadController";
+import { useAttachments } from "@/components/assistant/hooks/useAttachments";
 import {
   SLASH_COMMANDS,
   matchSlashCommands,
@@ -13,6 +14,7 @@ import { SlashCommandMenu } from "./SlashCommandMenu";
 export function Composer() {
   const conversation = useConversation();
   const { send, cancel } = useThreadController();
+  const { add: addAttachment } = useAttachments();
   const [value, setValue] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -43,6 +45,11 @@ export function Composer() {
       const consumed = await slash.match.run(slash.rawArgs, {
         conversation,
         composer: { setValue, submit },
+        attachments: {
+          addByKey: async (key: string) => {
+            await addAttachment("ticket", key);
+          },
+        },
       });
       if (consumed) return;
     }

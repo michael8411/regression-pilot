@@ -23,6 +23,7 @@ import {
   ReviewGrid,
   PushDialog,
 } from "@/components/regression";
+import { HistoryDrawer } from "@/components/history";
 import { RouteProvider, useRoute } from "@/contexts/RouteContext";
 import {
   CommandRegistryProvider,
@@ -94,6 +95,7 @@ export default function App() {
   const [hasAutoRedirected, setHasAutoRedirected] = useState<boolean>(false);
   const [manualSetupOpen, setManualSetupOpen] = useState<boolean>(false);
   const [version, setVersion] = useState<string>("…");
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const useNewShell = isFeatureEnabled("workspaceSwitcher");
 
@@ -327,9 +329,7 @@ export default function App() {
           onOpenSettings={() => {
             /* Phase 11 wires settings. */
           }}
-          onOpenHistory={() => {
-            /* Phase 5 wires history. */
-          }}
+          onOpenHistory={() => setHistoryOpen(true)}
         />
         <ShellBridge
           handlers={handlers}
@@ -339,8 +339,15 @@ export default function App() {
           zephyrReady={zephyrReady}
           version={version}
           modelName="Gemini 2.5 Flash"
+          onOpenHistory={() => setHistoryOpen(true)}
         />
         <CommandPaletteHost />
+        {isFeatureEnabled("historyDrawer") && (
+          <HistoryDrawer
+            open={historyOpen}
+            onClose={() => setHistoryOpen(false)}
+          />
+        )}
       </RouteProvider>
     </CommandRegistryProvider>
   );
@@ -380,6 +387,7 @@ interface ShellBridgeProps {
   zephyrReady: boolean;
   version: string;
   modelName: string;
+  onOpenHistory: () => void;
 }
 
 function ShellBridge({
@@ -390,6 +398,7 @@ function ShellBridge({
   zephyrReady,
   version,
   modelName,
+  onOpenHistory,
 }: ShellBridgeProps) {
   const { route } = useRoute();
   const { openPalette } = useCommandRegistry();
@@ -404,9 +413,7 @@ function ShellBridge({
       zephyrReady={zephyrReady}
       version={version}
       modelName={modelName}
-      onOpenHistory={() => {
-        /* Phase 5: open history drawer. */
-      }}
+      onOpenHistory={onOpenHistory}
       onOpenSettings={() => {
         /* Phase 11: open settings overlay. */
       }}

@@ -65,6 +65,7 @@ export {
   PlugZap,
   Plus,
   RefreshCw,
+  RotateCcw,
   Search,
   Send,
   Settings,

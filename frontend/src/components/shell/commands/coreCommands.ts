@@ -18,6 +18,7 @@ import type { CommandItem } from "@/contexts/CommandRegistryContext";
 export function coreCommands(args: {
   onOpenSettings: () => void;
   onOpenHistory: () => void;
+  onOpenSetup: () => void;
 }): CommandItem[] {
   return [
     {
@@ -72,6 +73,15 @@ export function coreCommands(args: {
       icon: History,
       kbd: "G H",
       action: { type: "run", run: args.onOpenHistory },
+    },
+    {
+      id: "action.run-setup",
+      group: "action",
+      label: "Run setup wizard",
+      sub: "modal",
+      icon: SettingsIcon,
+      keywords: ["onboarding", "configure", "first run", "setup"],
+      action: { type: "run", run: args.onOpenSetup },
     },
     {
       id: "help.shortcuts",

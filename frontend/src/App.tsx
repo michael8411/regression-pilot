@@ -24,6 +24,8 @@ import {
   PushDialog,
 } from "@/components/regression";
 import { HistoryDrawer } from "@/components/history";
+import { SetupWizard } from "@/components/onboarding";
+import { getConfigStatus } from "@/lib/api";
 import { RouteProvider, useRoute } from "@/contexts/RouteContext";
 import {
   CommandRegistryProvider,
@@ -96,6 +98,7 @@ export default function App() {
   const [manualSetupOpen, setManualSetupOpen] = useState<boolean>(false);
   const [version, setVersion] = useState<string>("…");
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   const useNewShell = isFeatureEnabled("workspaceSwitcher");
 
@@ -108,6 +111,20 @@ export default function App() {
     saveStateImmediate,
     saveStateBatch,
   } = useSession();
+
+  useEffect(() => {
+    if (!isFeatureEnabled("onboardingV2")) return;
+    let cancelled = false;
+    getConfigStatus()
+      .then((s) => {
+        if (cancelled) return;
+        const firstRun = !s.jira.configured && !s.ai.configured;
+        const skipped = localStorage.getItem("onboarding.skipped") === "true";
+        if (firstRun && !skipped) setWizardOpen(true);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     fetch("http://localhost:8000/health")
@@ -330,6 +347,10 @@ export default function App() {
             /* Phase 11 wires settings. */
           }}
           onOpenHistory={() => setHistoryOpen(true)}
+          onOpenSetup={() => {
+            localStorage.removeItem("onboarding.skipped");
+            setWizardOpen(true);
+          }}
         />
         <ShellBridge
           handlers={handlers}
@@ -348,6 +369,19 @@ export default function App() {
             onClose={() => setHistoryOpen(false)}
           />
         )}
+        {isFeatureEnabled("onboardingV2") && (
+          <SetupWizard
+            open={wizardOpen}
+            onClose={() => {
+              localStorage.setItem("onboarding.skipped", "true");
+              setWizardOpen(false);
+            }}
+            onFinish={() => {
+              localStorage.removeItem("onboarding.skipped");
+              setWizardOpen(false);
+            }}
+          />
+        )}
       </RouteProvider>
     </CommandRegistryProvider>
   );
@@ -361,13 +395,15 @@ function ShellCommandsBridge() {
 function CoreCommandsBridge({
   onOpenSettings,
   onOpenHistory,
+  onOpenSetup,
 }: {
   onOpenSettings: () => void;
   onOpenHistory: () => void;
+  onOpenSetup: () => void;
 }) {
   const commands = useMemo(
-    () => coreCommands({ onOpenSettings, onOpenHistory }),
-    [onOpenSettings, onOpenHistory],
+    () => coreCommands({ onOpenSettings, onOpenHistory, onOpenSetup }),
+    [onOpenSettings, onOpenHistory, onOpenSetup],
   );
   useRegisterCommands(commands);
   return null;

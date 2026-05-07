@@ -52,7 +52,7 @@ CREATE_ATTACHMENTS_TABLE = """
 CREATE TABLE IF NOT EXISTS attachments (
     id              TEXT PRIMARY KEY,
     conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
-    kind            TEXT NOT NULL CHECK (kind IN ('ticket','test_case','session_ref')),
+    kind            TEXT NOT NULL CHECK (kind IN ('ticket','test_case','session_ref','mcp_tool')),
     ref             TEXT NOT NULL,
     created_at      TEXT NOT NULL
 )

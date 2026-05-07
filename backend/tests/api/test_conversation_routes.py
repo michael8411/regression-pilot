@@ -172,7 +172,7 @@ class TestStream:
 
         import services.conversation_service as svc
 
-        async def fake_stream(messages, tickets):
+        async def fake_stream(messages, tickets, *, tool_catalog=None):
             yield "one "
             yield "two"
 
@@ -187,6 +187,47 @@ class TestStream:
 
         assert any('"text": "one "' in e or '"text":"one "' in e for e in events)
         assert any('"done"' in e for e in events)
+
+
+class TestToolMessage:
+
+    def test_post_tool_message_round_trip(self, conversation_client):
+        cid = _create(conversation_client).json()["id"]
+        r = conversation_client.post(
+            f"/conversations/{cid}/messages/tool",
+            json={
+                "request_id": "tc_route_1",
+                "tool": "echo",
+                "connection_id": "conn-1",
+                "status": "done",
+                "input": {"q": "hi"},
+                "output": {"content": "hi"},
+                "duration_ms": 11,
+            },
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert body["role"] == "tool"
+        # body content is JSON-stringified ToolCallPayload
+        import json as _json
+        payload = _json.loads(body["content"])
+        assert payload["tool"] == "echo"
+        assert payload["status"] == "done"
+
+    def test_post_tool_message_unknown_conversation_404(
+        self, conversation_client
+    ):
+        r = conversation_client.post(
+            "/conversations/does-not-exist/messages/tool",
+            json={
+                "request_id": "tc_x",
+                "tool": "echo",
+                "connection_id": "c",
+                "status": "done",
+                "input": {},
+            },
+        )
+        assert r.status_code == 404
 
 
 class TestAttachments:

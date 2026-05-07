@@ -14,6 +14,7 @@ import type {
   ConversationWithMessages,
   Message,
   SecretScanWarning,
+  ToolCallPayload,
 } from "@/types/conversations";
 
 export interface ConversationContextValue {
@@ -25,11 +26,22 @@ export interface ConversationContextValue {
   streaming: boolean;
   /** Most recent secret-scan warnings from a save. UI may surface and clear. */
   lastWarnings: SecretScanWarning[];
+  /** Tool calls that arrived as `tool_call` events and haven't been resolved. */
+  pendingToolCalls: ToolCallPayload[];
   refresh: () => Promise<void>;
   appendMessage: (m: Message) => void;
   appendStreamChunk: (chunk: string) => void;
   finalizeAssistant: (final: Message) => void;
   clearWarnings: () => void;
+  /** Phase 9c: queue an inbound tool_call from the SSE stream. */
+  enqueueToolCall: (call: ToolCallPayload) => void;
+  /** Phase 9c: persist a resolved tool result + clear from pending queue. */
+  recordToolResult: (payload: ToolCallPayload) => Promise<Message | null>;
+  /** Phase 9c: explicit deny shortcut. */
+  denyToolCall: (
+    requestId: string,
+    options?: { reason?: string },
+  ) => Promise<Message | null>;
   attachments: Attachment[];
 }
 
@@ -55,6 +67,9 @@ export function ConversationProvider({
   const [error, setError] = useState<string | null>(null);
   const [streaming, setStreaming] = useState<boolean>(false);
   const [lastWarnings, setLastWarnings] = useState<SecretScanWarning[]>([]);
+  const [pendingToolCalls, setPendingToolCalls] = useState<ToolCallPayload[]>(
+    [],
+  );
 
   const lastConvoIdRef = useRef<string | null>(null);
 
@@ -121,6 +136,50 @@ export function ConversationProvider({
 
   const clearWarnings = useCallback(() => setLastWarnings([]), []);
 
+  // Reset pending tool calls when the conversation changes.
+  useEffect(() => {
+    setPendingToolCalls([]);
+  }, [conversationId]);
+
+  const enqueueToolCall = useCallback((call: ToolCallPayload) => {
+    setPendingToolCalls((prev) => {
+      if (prev.some((p) => p.request_id === call.request_id)) return prev;
+      return [...prev, call];
+    });
+  }, []);
+
+  const recordToolResult = useCallback(
+    async (payload: ToolCallPayload): Promise<Message | null> => {
+      if (!conversationId) return null;
+      const msg = await api.recordToolMessage(conversationId, payload);
+      // Append the tool message into the local thread and clear the pending entry.
+      setCurrent((prev) => {
+        if (!prev || prev.conversation.id !== conversationId) return prev;
+        return { ...prev, messages: [...prev.messages, msg] };
+      });
+      setPendingToolCalls((prev) =>
+        prev.filter((p) => p.request_id !== payload.request_id),
+      );
+      return msg;
+    },
+    [conversationId],
+  );
+
+  const denyToolCall = useCallback(
+    async (
+      requestId: string,
+      _options?: { reason?: string },
+    ): Promise<Message | null> => {
+      const call = pendingToolCalls.find((p) => p.request_id === requestId);
+      if (!call) return null;
+      return recordToolResult({
+        ...call,
+        status: "denied",
+      });
+    },
+    [pendingToolCalls, recordToolResult],
+  );
+
   const value = useMemo<ConversationContextValue>(
     () => ({
       current,
@@ -129,11 +188,15 @@ export function ConversationProvider({
       error,
       streaming,
       lastWarnings,
+      pendingToolCalls,
       refresh,
       appendMessage,
       appendStreamChunk,
       finalizeAssistant,
       clearWarnings,
+      enqueueToolCall,
+      recordToolResult,
+      denyToolCall,
       attachments: current?.attachments ?? [],
     }),
     [
@@ -143,11 +206,15 @@ export function ConversationProvider({
       error,
       streaming,
       lastWarnings,
+      pendingToolCalls,
       refresh,
       appendMessage,
       appendStreamChunk,
       finalizeAssistant,
       clearWarnings,
+      enqueueToolCall,
+      recordToolResult,
+      denyToolCall,
     ],
   );
 

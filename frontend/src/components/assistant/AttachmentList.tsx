@@ -8,11 +8,17 @@ interface Props {
   onRemove: (id: string) => void;
 }
 
-const SECTION_ORDER: Attachment["kind"][] = ["ticket", "test_case", "session_ref"];
+const SECTION_ORDER: Attachment["kind"][] = [
+  "ticket",
+  "test_case",
+  "session_ref",
+  "mcp_tool",
+];
 const SECTION_LABEL: Record<Attachment["kind"], string> = {
   ticket: "Tickets",
   test_case: "Test cases",
   session_ref: "Session",
+  mcp_tool: "Tools",
 };
 
 export function AttachmentList({ attachments, onRemove }: Props) {
@@ -21,6 +27,7 @@ export function AttachmentList({ attachments, onRemove }: Props) {
       ticket: [],
       test_case: [],
       session_ref: [],
+      mcp_tool: [],
     };
     for (const a of attachments) buckets[a.kind].push(a);
     return buckets;

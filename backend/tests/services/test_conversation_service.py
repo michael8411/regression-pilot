@@ -271,7 +271,7 @@ class TestStream:
             )
         )
 
-        async def fake_stream(messages, tickets):
+        async def fake_stream(messages, tickets, *, tool_catalog=None):
             yield "Hello "
             yield "world"
 
@@ -297,7 +297,7 @@ class TestStream:
             )
         )
 
-        async def fake_stream(messages, tickets):
+        async def fake_stream(messages, tickets, *, tool_catalog=None):
             yield "partial"
             raise RuntimeError("boom internal")
 

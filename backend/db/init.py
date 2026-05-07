@@ -12,6 +12,10 @@ try:
         CREATE_ATTACHMENTS_INDEX,
         CREATE_LIVE_BOARDS_TABLE,
         CREATE_LIVE_BOARDS_INDEX,
+        CREATE_TEST_CYCLES_TABLE,
+        CREATE_TEST_CYCLES_INDEX,
+        CREATE_CYCLE_RUNS_TABLE,
+        CREATE_CYCLE_RUNS_INDEX,
         CREATE_MCP_CONNECTIONS_TABLE,
     )
     from backend.utils.crypto import encrypt_value, get_encryptor
@@ -27,6 +31,10 @@ except ImportError:  # pragma: no cover - supports running from backend/ as scri
         CREATE_ATTACHMENTS_INDEX,
         CREATE_LIVE_BOARDS_TABLE,
         CREATE_LIVE_BOARDS_INDEX,
+        CREATE_TEST_CYCLES_TABLE,
+        CREATE_TEST_CYCLES_INDEX,
+        CREATE_CYCLE_RUNS_TABLE,
+        CREATE_CYCLE_RUNS_INDEX,
         CREATE_MCP_CONNECTIONS_TABLE,
     )
     from utils.crypto import encrypt_value, get_encryptor
@@ -50,6 +58,10 @@ async def init_db() -> None:
         await db.execute(CREATE_ATTACHMENTS_INDEX)
         await db.execute(CREATE_LIVE_BOARDS_TABLE)
         await db.execute(CREATE_LIVE_BOARDS_INDEX)
+        await db.execute(CREATE_TEST_CYCLES_TABLE)
+        await db.execute(CREATE_TEST_CYCLES_INDEX)
+        await db.execute(CREATE_CYCLE_RUNS_TABLE)
+        await db.execute(CREATE_CYCLE_RUNS_INDEX)
         await db.execute(CREATE_MCP_CONNECTIONS_TABLE)
         await db.commit()
 

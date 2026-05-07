@@ -31,6 +31,7 @@ import {
   McpConnectionsOverlay,
   requestOpenCreateDialog as requestOpenMcpDialog,
 } from "@/components/mcp";
+import { CyclesView } from "@/components/cycles";
 import { getConfigStatus } from "@/lib/api";
 import { RouteProvider, useRoute } from "@/contexts/RouteContext";
 import {
@@ -559,7 +560,11 @@ function RegressionScreen({
     case "push":
       return <PushDialog />;
     case "cycles":
-      return <ComingSoon label="Test Cycles" description="Shipping in Phase 10." />;
+      return isFeatureEnabled("testCycles") ? (
+        <CyclesView />
+      ) : (
+        <ComingSoon label="Test Cycles" description="Shipping in Phase 10." />
+      );
   }
 }
 
@@ -607,7 +612,11 @@ function LegacyRegressionScreen({
         />
       );
     case "cycles":
-      return <ComingSoon label="Test Cycles" description="Shipping in Phase 10." />;
+      return isFeatureEnabled("testCycles") ? (
+        <CyclesView />
+      ) : (
+        <ComingSoon label="Test Cycles" description="Shipping in Phase 10." />
+      );
   }
 }
 

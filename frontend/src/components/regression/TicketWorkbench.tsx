@@ -24,6 +24,8 @@ import type {
   JiraVersion,
 } from "@/types";
 import { useRegressionSession } from "./hooks/useRegressionSession";
+import { isFeatureEnabled } from "@/lib/featureFlags";
+import { requestOpenBuilder } from "@/components/cycles";
 import { ProjectVersionPanel } from "./parts/ProjectVersionPanel";
 import { TicketRow } from "./parts/TicketRow";
 import {
@@ -242,6 +244,24 @@ function TicketWorkbenchInner({
         selectedCount={selectedKeys.size}
         canContinue={selectedKeys.size > 0}
         onContinue={onContinue}
+        onSaveAsCycle={
+          isFeatureEnabled("testCycles")
+            ? () => {
+                requestOpenBuilder({
+                  name:
+                    selectedProject && selectedVersion
+                      ? `${selectedProject.key} ${selectedVersion.name} cycle`
+                      : selectedProject
+                        ? `${selectedProject.key} cycle`
+                        : "",
+                  projectKey: selectedProject?.key ?? "",
+                  versionHint: selectedVersion?.name ?? "",
+                  ticketKeys: Array.from(selectedKeys),
+                });
+                goto(["regression", "cycles"]);
+              }
+            : undefined
+        }
       />
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
@@ -303,6 +323,7 @@ interface HeaderProps {
   selectedCount: number;
   canContinue: boolean;
   onContinue: () => void;
+  onSaveAsCycle?: () => void;
   disabled?: boolean;
 }
 
@@ -312,6 +333,7 @@ function Header({
   selectedCount,
   canContinue,
   onContinue,
+  onSaveAsCycle,
   disabled,
 }: HeaderProps) {
   return (
@@ -323,6 +345,16 @@ function Header({
         </p>
       </div>
       <SearchInput value={query} onChange={onQuery} disabled={disabled} />
+      {onSaveAsCycle && (
+        <Button
+          variant="ghost"
+          size="md"
+          disabled={selectedCount === 0}
+          onClick={onSaveAsCycle}
+        >
+          Save as cycle…
+        </Button>
+      )}
       <Button
         variant="primary"
         size="md"

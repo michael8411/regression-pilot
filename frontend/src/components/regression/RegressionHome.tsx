@@ -15,6 +15,8 @@ import { Card, CardBody, CardHeader, Button, Badge } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { useRegressionSession, type RegressionState } from "./hooks/useRegressionSession";
 import type { Route } from "@/types/routing";
+import { isFeatureEnabled } from "@/lib/featureFlags";
+import { CyclesSummaryCard } from "@/components/cycles";
 
 type Phase = "fresh" | "tickets" | "generated" | "pushed";
 
@@ -52,7 +54,11 @@ export function RegressionHome() {
           count={state.testCases.length}
           onClick={() => goto(["regression", "review"])}
         />
-        <CyclesPlaceholderCard />
+        {isFeatureEnabled("testCycles") ? (
+          <CyclesSummaryCard />
+        ) : (
+          <CyclesPlaceholderCard />
+        )}
       </div>
     </div>
   );

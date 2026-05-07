@@ -79,3 +79,17 @@ CREATE_LIVE_BOARDS_INDEX = """
 CREATE INDEX IF NOT EXISTS idx_live_boards_pinned_updated
     ON live_boards (pinned DESC, updated_at DESC)
 """
+
+CREATE_MCP_CONNECTIONS_TABLE = """
+CREATE TABLE IF NOT EXISTS mcp_connections (
+    id            TEXT PRIMARY KEY,
+    name          TEXT NOT NULL,
+    command       TEXT NOT NULL,
+    args          TEXT NOT NULL DEFAULT '[]',
+    env           TEXT NOT NULL DEFAULT '',
+    enabled       INTEGER NOT NULL DEFAULT 1,
+    auto_approve  TEXT NOT NULL DEFAULT '',
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+)
+"""

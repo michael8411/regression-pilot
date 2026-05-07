@@ -19,7 +19,7 @@ export interface Message {
   meta: Record<string, unknown>;
 }
 
-export type AttachmentKind = "ticket" | "test_case" | "session_ref";
+export type AttachmentKind = "ticket" | "test_case" | "session_ref" | "mcp_tool";
 
 export interface Attachment {
   id: string;
@@ -44,10 +44,47 @@ export interface AppendMessageResponse {
   secret_scan_warnings: SecretScanWarning[];
 }
 
+export type ToolCallStatus =
+  | "requested"
+  | "approved"
+  | "running"
+  | "done"
+  | "error"
+  | "denied";
+
 export interface ToolCallPayload {
+  request_id: string;
+  connection_id: string;
   tool: string;
-  input: Record<string, unknown>;
-  output?: Record<string, unknown>;
-  status: "requested" | "running" | "done" | "error";
+  input: unknown;
+  status: ToolCallStatus;
+  output?: unknown;
   error?: string;
+  duration_ms?: number;
+}
+
+export interface ToolCallStreamEvent {
+  request_id: string;
+  connection_id: string;
+  tool: string;
+  input: unknown;
+}
+
+export type StreamEvent =
+  | { text: string }
+  | { tool_call: ToolCallStreamEvent }
+  | { error: string }
+  | { done: true; message_id?: string };
+
+export interface ToolAttachmentRef {
+  kind: "mcp_tool";
+  connection_id: string;
+  tool: string;
+}
+
+export interface ToolCatalogEntry {
+  connection_id: string;
+  tool: string;
+  description?: string;
+  schema?: Record<string, unknown> | null;
 }

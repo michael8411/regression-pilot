@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Attachment } from "@/types/conversations";
-import { decodeTestCaseRef } from "@/components/assistant/lib/attachmentUtils";
+import {
+  decodeTestCaseRef,
+  decodeToolRef,
+} from "@/components/assistant/lib/attachmentUtils";
 import { listSessions } from "@/lib/api";
 
 export interface ResolvedInfo {
@@ -64,6 +67,15 @@ export function useResolvedAttachments(
     for (const a of attachments) {
       if (a.kind === "ticket") {
         out.set(a.id, { label: a.ref });
+        continue;
+      }
+      if (a.kind === "mcp_tool") {
+        const decoded = decodeToolRef(a.ref);
+        if (decoded) {
+          out.set(a.id, { label: decoded.tool });
+        } else {
+          out.set(a.id, { stale: true, label: "Invalid ref" });
+        }
         continue;
       }
       if (a.kind === "session_ref") {

@@ -308,7 +308,11 @@ async def _resolve_attached_tickets(attachments: list[dict]) -> list[dict]:
         return []
 
 
-async def stream_assistant_reply(conversation_id: str) -> AsyncIterator[dict]:
+async def stream_assistant_reply(
+    conversation_id: str,
+    *,
+    tool_catalog: Optional[list[dict]] = None,
+) -> AsyncIterator[dict]:
     convo = await get_conversation(conversation_id)
     if not convo:
         yield {"error": "conversation not found"}
@@ -317,19 +321,32 @@ async def stream_assistant_reply(conversation_id: str) -> AsyncIterator[dict]:
     history = [
         {"role": m["role"], "content": m["content"]}
         for m in convo["messages"]
-        if m["role"] in ("user", "assistant", "system")
+        if m["role"] in ("user", "assistant", "system", "tool")
     ]
-    if not history or history[-1]["role"] != "user":
-        yield {"error": "last message must be from user"}
+    if not history or history[-1]["role"] not in ("user", "tool"):
+        yield {"error": "last message must be from user or tool"}
         return
 
     tickets_payload = await _resolve_attached_tickets(convo["attachments"])
 
     accumulated = ""
     try:
-        async for chunk in ai_service.stream_chat_message(history, tickets_payload):
-            accumulated += chunk
-            yield {"text": chunk}
+        async for chunk in ai_service.stream_chat_message(
+            history, tickets_payload, tool_catalog=tool_catalog
+        ):
+            if isinstance(chunk, dict) and "tool_call" in chunk:
+                # Persist any text accumulated so far, then yield the tool
+                # call event and stop. The client drives the next turn.
+                if accumulated.strip():
+                    await _persist_assistant_text(conversation_id, accumulated)
+                    accumulated = ""
+                yield chunk
+                return
+            text = chunk if isinstance(chunk, str) else chunk.get("text", "")
+            if not text:
+                continue
+            accumulated += text
+            yield {"text": text}
     except Exception as exc:
         logger.warning(
             "conversation_stream_error",
@@ -339,13 +356,96 @@ async def stream_assistant_reply(conversation_id: str) -> AsyncIterator[dict]:
         yield {"error": "Assistant temporarily unavailable."}
         return
 
-    persisted, _ = await append_message(
-        conversation_id, role="assistant", content=accumulated, meta={}
-    )
-    if persisted:
-        yield {"done": True, "message_id": persisted["id"]}
+    persisted_id = await _persist_assistant_text(conversation_id, accumulated)
+    if persisted_id:
+        yield {"done": True, "message_id": persisted_id}
     else:
         yield {"error": "conversation deleted during stream"}
+
+
+async def _persist_assistant_text(
+    conversation_id: str, text: str
+) -> Optional[str]:
+    """Persist an assistant-text turn. Returns message id, or None if the
+    conversation no longer exists. Empty/whitespace text is ignored."""
+    if not text or not text.strip():
+        return None
+    persisted, _ = await append_message(
+        conversation_id, role="assistant", content=text, meta={}
+    )
+    return persisted["id"] if persisted else None
+
+
+async def append_tool_message(
+    conversation_id: str, payload: dict
+) -> Optional[dict]:
+    """Persist a `tool` role message capturing the resolved MCP call.
+
+    `payload` matches `schemas.conversation_models.ToolMessageInput`. We
+    secret-scan the JSON-stringified output/error and attach a `meta.warning`
+    flag if anything trips. Returns the stored message dict; None if the
+    conversation does not exist.
+    """
+    if not await _conversation_exists(conversation_id):
+        return None
+
+    blob = {
+        "request_id": payload.get("request_id"),
+        "tool": payload.get("tool"),
+        "connection_id": payload.get("connection_id"),
+        "status": payload.get("status"),
+        "input": payload.get("input"),
+        "output": payload.get("output"),
+        "error": payload.get("error"),
+        "duration_ms": payload.get("duration_ms"),
+    }
+    text_for_scan = json.dumps(
+        {"output": blob["output"], "error": blob["error"]}, default=str
+    )[:32000]
+    findings = scan_for_secrets(text_for_scan)
+    pattern_names = _findings_to_names(findings)
+    meta: dict[str, Any] = {}
+    if pattern_names:
+        meta["warning"] = "secret_in_tool_output"
+        meta["secret_patterns"] = pattern_names
+        logger.warning(
+            "conversation_tool_output_secret_scan_hit",
+            conversation_id=conversation_id,
+            tool=blob["tool"],
+            patterns=pattern_names,
+        )
+
+    mid = str(uuid.uuid4())
+    now = _now_iso()
+    encrypted_content = encrypt_value(json.dumps(blob, default=str))
+    meta_json = json.dumps(meta)
+    async with get_connection() as db:
+        await db.execute(
+            "INSERT INTO messages (id, conversation_id, role, content, created_at, meta) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (mid, conversation_id, "tool", encrypted_content, now, meta_json),
+        )
+        await db.execute(
+            "UPDATE conversations SET updated_at = ? WHERE id = ?",
+            (now, conversation_id),
+        )
+        await db.commit()
+
+    logger.info(
+        "conversation_tool_message_appended",
+        conversation_id=conversation_id,
+        message_id=mid,
+        tool=blob["tool"],
+        status=blob["status"],
+    )
+    return {
+        "id": mid,
+        "conversation_id": conversation_id,
+        "role": "tool",
+        "content": json.dumps(blob, default=str),
+        "created_at": now,
+        "meta": meta,
+    }
 
 
 async def add_attachment(

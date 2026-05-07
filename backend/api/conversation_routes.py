@@ -13,8 +13,10 @@ try:
         ConversationWithMessagesResponse,
         CreateAttachmentRequest,
         CreateConversationRequest,
+        MessageResponse,
         SecretScanWarning,
         StreamMessageRequest,
+        ToolMessageInput,
         UpdateConversationRequest,
     )
     from backend.services import conversation_service
@@ -27,8 +29,10 @@ except ImportError:  # pragma: no cover - supports running from backend/ as scri
         ConversationWithMessagesResponse,
         CreateAttachmentRequest,
         CreateConversationRequest,
+        MessageResponse,
         SecretScanWarning,
         StreamMessageRequest,
+        ToolMessageInput,
         UpdateConversationRequest,
     )
     from services import conversation_service
@@ -90,10 +94,14 @@ async def append_message(cid: str, req: AppendMessageRequest):
 
 
 @router.post("/{cid}/messages/stream")
-async def stream_message(cid: str, _req: StreamMessageRequest):
+async def stream_message(cid: str, req: StreamMessageRequest):
+    tool_catalog = req.tool_catalog if req and req.tool_catalog else None
+
     async def event_generator():
         try:
-            async for evt in conversation_service.stream_assistant_reply(cid):
+            async for evt in conversation_service.stream_assistant_reply(
+                cid, tool_catalog=tool_catalog
+            ):
                 yield f"data: {json.dumps(evt)}\n\n"
         except Exception as exc:  # last-resort sanitizer
             logger.warning(
@@ -108,6 +116,16 @@ async def stream_message(cid: str, _req: StreamMessageRequest):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )
+
+
+@router.post("/{cid}/messages/tool", response_model=MessageResponse)
+async def record_tool_message(cid: str, req: ToolMessageInput):
+    persisted = await conversation_service.append_tool_message(
+        cid, req.model_dump()
+    )
+    if persisted is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return persisted
 
 
 @router.post("/{cid}/attachments", response_model=AttachmentResponse)

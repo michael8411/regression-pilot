@@ -1,5 +1,6 @@
 import json
 import re
+import uuid
 from typing import AsyncIterator
 
 from google import genai
@@ -666,31 +667,36 @@ async def chat_message(
 async def stream_chat_message(
     messages: list[dict],
     tickets: list[dict] | None = None,
-) -> AsyncIterator[str]:
+    tool_catalog: list[dict] | None = None,
+) -> AsyncIterator[str | dict]:
+    """Stream Gemini output as text chunks, plus tool_call dicts when the
+    model emits a `<tool name="..." connection="...">{...}</tool>` tag.
+
+    Yields:
+      - `str` for plain text chunks.
+      - `{"tool_call": {request_id, connection_id, tool, input}}` when a tag closes.
+
+    Tool calls follow the documented tag-based fallback: universal across
+    Gemini models, no function-calling complexity. The tag parser buffers
+    text so multi-chunk tags reassemble before parsing JSON.
+    """
     client = _get_client()
     prefs = read_preferences()
 
     system = SYSTEM_INSTRUCTION
     if tickets:
         ticket_summary = json.dumps(
-            [
-                {
-                    "key": t["key"],
-                    "summary": t["summary"],
-                    "description": t["description"][:500],
-                }
-                for t in tickets
-            ],
+            _build_test_generation_ticket_view(tickets),
             indent=2,
         )
-        if tickets:
-            ticket_summary = json.dumps(
-                _build_test_generation_ticket_view(tickets),
-                indent=2,
-            )
-            system += f"\n\n## Current Ticket Context\n{ticket_summary}"
+        system += f"\n\n## Current Ticket Context\n{ticket_summary}"
+
+    if tool_catalog:
+        system += _build_tool_catalog_prompt(tool_catalog)
 
     contents = _build_contents(messages)
+
+    parser = _ToolCallStreamParser() if tool_catalog else None
 
     async for chunk in await client.aio.models.generate_content_stream(
         model=prefs["ai_model"],
@@ -701,8 +707,146 @@ async def stream_chat_message(
             temperature=prefs["ai_temperature"],
         ),
     ):
-        if chunk.text:
+        if not chunk.text:
+            continue
+        if parser is None:
             yield chunk.text
+            continue
+        for evt in parser.feed(chunk.text):
+            yield evt
+            if isinstance(evt, dict) and "tool_call" in evt:
+                # Stop pulling further chunks; conversation_service handles
+                # the pause/resume cycle.
+                return
+
+    if parser is not None:
+        # Flush any trailing buffered text.
+        tail = parser.flush()
+        if tail:
+            yield tail
+
+
+def _build_tool_catalog_prompt(catalog: list[dict]) -> str:
+    """System prompt that teaches the model how to request a tool call."""
+    if not catalog:
+        return ""
+    lines = [
+        "",
+        "## Available MCP tools",
+        "",
+        "When you need to call one of these tools, emit EXACTLY one tag with",
+        "JSON arguments inside, then stop talking. The tag format is:",
+        "",
+        '<tool name="TOOL_NAME" connection="CONNECTION_ID">{ ...json input... }</tool>',
+        "",
+        "Rules:",
+        "- Emit at most one tool tag per turn.",
+        "- The JSON between the tags MUST be valid JSON.",
+        "- Do not nest tags. Do not paraphrase the tag.",
+        "- After the tool runs, the tool output will be shown to you on a",
+        "  later turn so you can summarize it for the user.",
+        "",
+        "Available tools:",
+    ]
+    for entry in catalog:
+        conn = str(entry.get("connection_id", ""))
+        tool = str(entry.get("tool", ""))
+        desc = str(entry.get("description", "") or "").strip()
+        line = f"- `{tool}` (connection `{conn}`)"
+        if desc:
+            line += f" — {desc[:200]}"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+class _ToolCallStreamParser:
+    """Buffers text chunks and emits text or `tool_call` events.
+
+    Only one tool call per turn — once we see a complete `<tool …>…</tool>`,
+    we yield the event and the caller stops streaming.
+    """
+
+    _MAX_BUFFER = 8 * 1024
+
+    def __init__(self) -> None:
+        self._buf = ""
+        self._in_tag = False
+
+    def feed(self, chunk: str) -> list[str | dict]:
+        self._buf += chunk
+        out: list[str | dict] = []
+
+        while True:
+            if not self._in_tag:
+                idx = self._buf.find("<tool ")
+                if idx < 0:
+                    # No tag in sight — flush most of the buffer as text,
+                    # but hold a small lookahead in case a partial tag
+                    # straddles the next chunk.
+                    safe = max(0, len(self._buf) - 8)
+                    if safe > 0:
+                        out.append(self._buf[:safe])
+                        self._buf = self._buf[safe:]
+                    return out
+                if idx > 0:
+                    out.append(self._buf[:idx])
+                    self._buf = self._buf[idx:]
+                self._in_tag = True
+
+            close = self._buf.find("</tool>")
+            if close < 0:
+                if len(self._buf) > self._MAX_BUFFER:
+                    # Treat as malformed — flush as plain text and reset.
+                    out.append(self._buf)
+                    self._buf = ""
+                    self._in_tag = False
+                return out
+
+            tag_text = self._buf[: close + len("</tool>")]
+            self._buf = self._buf[close + len("</tool>") :]
+            self._in_tag = False
+
+            evt = _parse_tool_tag(tag_text)
+            if evt is None:
+                # Malformed — keep the raw text so the model's output is
+                # never silently swallowed.
+                out.append(tag_text)
+            else:
+                out.append({"tool_call": evt})
+
+    def flush(self) -> str:
+        text = self._buf
+        self._buf = ""
+        self._in_tag = False
+        return text
+
+
+_TOOL_TAG_RE = re.compile(
+    r'<tool\s+name="(?P<name>[^"]+)"\s+connection="(?P<conn>[^"]+)"\s*>'
+    r"(?P<json>.*?)</tool>",
+    re.DOTALL,
+)
+
+
+def _parse_tool_tag(raw: str) -> dict | None:
+    match = _TOOL_TAG_RE.search(raw)
+    if not match:
+        return None
+    name = match.group("name").strip()
+    conn = match.group("conn").strip()
+    body = match.group("json").strip() or "{}"
+    try:
+        payload = json.loads(body)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return {
+        "request_id": f"tc_{uuid.uuid4().hex[:12]}",
+        "connection_id": conn,
+        "tool": name,
+        "input": payload,
+    }
 
 
 def _build_contents(messages: list[dict]) -> list[types.Content]:

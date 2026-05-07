@@ -2,7 +2,7 @@ from typing import Any, Literal, Optional
 from pydantic import BaseModel, Field
 
 MessageRole = Literal["user", "assistant", "system", "tool"]
-AttachmentKind = Literal["ticket", "test_case", "session_ref"]
+AttachmentKind = Literal["ticket", "test_case", "session_ref", "mcp_tool"]
 
 
 class CreateConversationRequest(BaseModel):
@@ -22,13 +22,35 @@ class AppendMessageRequest(BaseModel):
 
 
 class StreamMessageRequest(BaseModel):
-    """No fields. Reserved for future overrides."""
-    pass
+    """Optional payload for the streaming endpoint.
+
+    Phase 9c: clients pass `tool_catalog` so the model knows what MCP tools
+    are available for this turn. Empty / omitted means "no tools attached".
+    """
+    tool_catalog: Optional[list[dict[str, Any]]] = None
 
 
 class CreateAttachmentRequest(BaseModel):
     kind: AttachmentKind
     ref: str
+
+
+class ToolMessageInput(BaseModel):
+    request_id: str = Field(min_length=1, max_length=64)
+    tool: str = Field(min_length=1, max_length=128)
+    connection_id: str = Field(min_length=1, max_length=64)
+    status: Literal["done", "error", "denied"]
+    input: Any = None
+    output: Any = None
+    error: Optional[str] = None
+    duration_ms: Optional[int] = None
+
+
+class ToolCatalogEntry(BaseModel):
+    connection_id: str
+    tool: str
+    description: Optional[str] = None
+    schema_: Optional[dict[str, Any]] = Field(default=None, alias="schema")
 
 
 class ConversationResponse(BaseModel):

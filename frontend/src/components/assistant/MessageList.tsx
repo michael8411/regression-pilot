@@ -5,9 +5,10 @@ import { useThreadController } from "@/components/assistant/hooks/useThreadContr
 import type { Message } from "@/types/conversations";
 import { MessageBubble } from "./MessageBubble";
 import { StreamingIndicator } from "./StreamingIndicator";
+import { ToolApprovalCard } from "@/components/mcp/ToolApprovalCard";
 
 export function MessageList() {
-  const { current, streaming } = useConversation();
+  const { current, streaming, pendingToolCalls } = useConversation();
   const { regenerateLast } = useThreadController();
   const messages = current?.messages ?? [];
 
@@ -19,7 +20,12 @@ export function MessageList() {
   }, [messages]);
 
   const tailLength = messages[messages.length - 1]?.content.length ?? 0;
-  const { ref } = useAutoScroll([messages.length, tailLength, streaming]);
+  const { ref } = useAutoScroll([
+    messages.length,
+    tailLength,
+    streaming,
+    pendingToolCalls.length,
+  ]);
 
   const handleCopy = async (m: Message) => {
     try {
@@ -35,7 +41,7 @@ export function MessageList() {
       className="flex-1 overflow-y-auto px-4 py-4 space-y-3"
       aria-live="polite"
     >
-      {messages.length === 0 && (
+      {messages.length === 0 && pendingToolCalls.length === 0 && (
         <div className="text-center text-[12px] text-ink-faint py-8">
           Start the conversation. The assistant has no context until you do.
         </div>
@@ -49,6 +55,9 @@ export function MessageList() {
           onCopy={handleCopy}
           onRegenerate={regenerateLast}
         />
+      ))}
+      {pendingToolCalls.map((call) => (
+        <ToolApprovalCard key={call.request_id} call={call} />
       ))}
       {streaming && messages[messages.length - 1]?.role !== "assistant" && (
         <StreamingIndicator />

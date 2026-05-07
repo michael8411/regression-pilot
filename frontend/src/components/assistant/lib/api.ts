@@ -4,7 +4,10 @@ import type {
   AttachmentKind,
   Conversation,
   ConversationWithMessages,
+  Message,
   MessageRole,
+  ToolCallPayload,
+  ToolCatalogEntry,
 } from "@/types/conversations";
 
 const BASE =
@@ -86,22 +89,55 @@ export function removeAttachment(
   );
 }
 
+export function recordToolMessage(
+  id: string,
+  payload: ToolCallPayload,
+): Promise<Message> {
+  return jfetch<Message>(
+    `/conversations/${encodeURIComponent(id)}/messages/tool`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        request_id: payload.request_id,
+        tool: payload.tool,
+        connection_id: payload.connection_id,
+        status: payload.status,
+        input: payload.input,
+        output: payload.output,
+        error: payload.error,
+        duration_ms: payload.duration_ms,
+      }),
+    },
+  );
+}
+
 /** Stream an assistant reply. Yields raw SSE event objects. */
 export async function* streamAssistantReply(
   id: string,
   signal?: AbortSignal,
+  options?: { tool_catalog?: ToolCatalogEntry[] },
 ): AsyncGenerator<{
   text?: string;
   done?: boolean;
   error?: string;
   message_id?: string;
+  tool_call?: {
+    request_id: string;
+    connection_id: string;
+    tool: string;
+    input: unknown;
+  };
 }> {
+  const body =
+    options?.tool_catalog && options.tool_catalog.length > 0
+      ? JSON.stringify({ tool_catalog: options.tool_catalog })
+      : "{}";
   const res = await fetch(
     `${BASE}/conversations/${encodeURIComponent(id)}/messages/stream`,
     {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: "{}",
+      body,
       signal,
     },
   );

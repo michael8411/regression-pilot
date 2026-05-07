@@ -4,11 +4,15 @@ import {
   Folder,
   ListChecks,
   Ticket,
+  Wrench,
   X,
   type IconComponent,
 } from "@/lib/icons";
 import type { Attachment } from "@/types/conversations";
-import { decodeTestCaseRef } from "@/components/assistant/lib/attachmentUtils";
+import {
+  decodeTestCaseRef,
+  decodeToolRef,
+} from "@/components/assistant/lib/attachmentUtils";
 
 interface Props {
   attachment: Attachment;
@@ -53,11 +57,10 @@ export function AttachmentChip({ attachment, label, stale, onRemove }: Props) {
 }
 
 function iconFor(kind: Attachment["kind"]): IconComponent {
-  return kind === "ticket"
-    ? Ticket
-    : kind === "test_case"
-      ? ListChecks
-      : Folder;
+  if (kind === "ticket") return Ticket;
+  if (kind === "test_case") return ListChecks;
+  if (kind === "mcp_tool") return Wrench;
+  return Folder;
 }
 
 function defaultLabel(kind: Attachment["kind"], ref: string): string {
@@ -65,6 +68,10 @@ function defaultLabel(kind: Attachment["kind"], ref: string): string {
   if (kind === "test_case") {
     const decoded = decodeTestCaseRef(ref);
     return decoded ? `Test #${decoded.index + 1}` : "Test case";
+  }
+  if (kind === "mcp_tool") {
+    const decoded = decodeToolRef(ref);
+    return decoded ? decoded.tool : "Tool";
   }
   return "Session";
 }

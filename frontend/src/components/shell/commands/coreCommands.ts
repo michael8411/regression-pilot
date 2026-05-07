@@ -5,8 +5,10 @@ import {
   Keyboard,
   Layers,
   MessageSquare,
+  Plug,
   Settings as SettingsIcon,
 } from "@/lib/icons";
+import { isFeatureEnabled } from "@/lib/featureFlags";
 import type { CommandItem } from "@/contexts/CommandRegistryContext";
 
 /**
@@ -19,7 +21,10 @@ export function coreCommands(args: {
   onOpenSettings: () => void;
   onOpenHistory: () => void;
   onOpenSetup: () => void;
+  onOpenMcpConnections: () => void;
+  onAddMcpConnection: () => void;
 }): CommandItem[] {
+  const mcpEnabled = isFeatureEnabled("mcpV2");
   return [
     {
       id: "jump.regression",
@@ -83,6 +88,28 @@ export function coreCommands(args: {
       keywords: ["onboarding", "configure", "first run", "setup"],
       action: { type: "run", run: args.onOpenSetup },
     },
+    ...(mcpEnabled
+      ? ([
+          {
+            id: "jump.mcp-connections",
+            group: "jump",
+            label: "MCP: Connections",
+            sub: "modal",
+            icon: Plug,
+            keywords: ["mcp", "connections", "tools", "integrations"],
+            action: { type: "run", run: args.onOpenMcpConnections },
+          },
+          {
+            id: "mcp.add-connection",
+            group: "action",
+            label: "MCP: Add connection",
+            sub: "MCP",
+            icon: Plug,
+            keywords: ["mcp", "add", "new", "connection"],
+            action: { type: "run", run: args.onAddMcpConnection },
+          },
+        ] satisfies CommandItem[])
+      : []),
     {
       id: "help.shortcuts",
       group: "help",

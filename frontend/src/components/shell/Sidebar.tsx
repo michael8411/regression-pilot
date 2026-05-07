@@ -9,6 +9,7 @@ import {
   LayoutGrid,
   MessageSquare,
   Pin,
+  Plug,
   Settings,
   Sparkles,
   type IconComponent,
@@ -155,6 +156,14 @@ export function Sidebar({
           trailing={<KbdPill keys="G H" />}
           onClick={() => onOpenHistory?.()}
         />
+        {isFeatureEnabled("mcpV2") && (
+          <NavRow
+            icon={<Plug size={15} />}
+            label="Connections"
+            active={route[0] === "mcpConnections"}
+            onClick={() => goto(["mcpConnections"])}
+          />
+        )}
         <NavRow
           icon={<Settings size={15} />}
           label="Settings"

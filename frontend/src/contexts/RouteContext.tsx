@@ -29,6 +29,8 @@ interface RouteActions {
   gotoConversation: (conversationId: string) => void;
   /** Navigate directly to a Live board. */
   gotoBoard: (boardId: string) => void;
+  /** Open the temporary MCP Connections overlay (Phase 9b). */
+  gotoMcpConnections: () => void;
 }
 
 type RouteContextValue = RouteState & RouteActions;
@@ -47,7 +49,12 @@ const DEFAULT_ROUTE: Route = ["regression", "home"];
 
 function isOverlay(route: Route): boolean {
   const first = route[0];
-  return first === "settings" || first === "onboarding" || first === "history";
+  return (
+    first === "settings" ||
+    first === "onboarding" ||
+    first === "history" ||
+    first === "mcpConnections"
+  );
 }
 
 function workspaceHome(ws: Workspace): Route {
@@ -106,6 +113,11 @@ export function RouteProvider({
     [goto],
   );
 
+  const gotoMcpConnections = useCallback(
+    () => goto(["mcpConnections"]),
+    [goto],
+  );
+
   const value = useMemo<RouteContextValue>(
     () => ({
       route,
@@ -117,8 +129,18 @@ export function RouteProvider({
       closeOverlay,
       gotoConversation,
       gotoBoard,
+      gotoMcpConnections,
     }),
-    [route, goto, gotoWorkspace, back, closeOverlay, gotoConversation, gotoBoard],
+    [
+      route,
+      goto,
+      gotoWorkspace,
+      back,
+      closeOverlay,
+      gotoConversation,
+      gotoBoard,
+      gotoMcpConnections,
+    ],
   );
 
   return <RouteContext.Provider value={value}>{children}</RouteContext.Provider>;

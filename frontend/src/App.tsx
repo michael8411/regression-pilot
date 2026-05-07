@@ -27,6 +27,10 @@ import { HistoryDrawer } from "@/components/history";
 import { SetupWizard } from "@/components/onboarding";
 import { AssistantWorkspace } from "@/components/assistant";
 import { LiveWorkspace } from "@/components/live";
+import {
+  McpConnectionsOverlay,
+  requestOpenCreateDialog as requestOpenMcpDialog,
+} from "@/components/mcp";
 import { getConfigStatus } from "@/lib/api";
 import { RouteProvider, useRoute } from "@/contexts/RouteContext";
 import {
@@ -383,6 +387,7 @@ export default function App() {
             }}
           />
         )}
+        {isFeatureEnabled("mcpV2") && <McpConnectionsOverlay />}
       </RouteProvider>
     </CommandRegistryProvider>
   );
@@ -402,9 +407,32 @@ function CoreCommandsBridge({
   onOpenHistory: () => void;
   onOpenSetup: () => void;
 }) {
+  const { gotoMcpConnections } = useRoute();
+  const onOpenMcpConnections = useCallback(
+    () => gotoMcpConnections(),
+    [gotoMcpConnections],
+  );
+  const onAddMcpConnection = useCallback(() => {
+    requestOpenMcpDialog();
+    gotoMcpConnections();
+  }, [gotoMcpConnections]);
+
   const commands = useMemo(
-    () => coreCommands({ onOpenSettings, onOpenHistory, onOpenSetup }),
-    [onOpenSettings, onOpenHistory, onOpenSetup],
+    () =>
+      coreCommands({
+        onOpenSettings,
+        onOpenHistory,
+        onOpenSetup,
+        onOpenMcpConnections,
+        onAddMcpConnection,
+      }),
+    [
+      onOpenSettings,
+      onOpenHistory,
+      onOpenSetup,
+      onOpenMcpConnections,
+      onAddMcpConnection,
+    ],
   );
   useRegisterCommands(commands);
   return null;

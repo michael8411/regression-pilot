@@ -80,6 +80,50 @@ CREATE INDEX IF NOT EXISTS idx_live_boards_pinned_updated
     ON live_boards (pinned DESC, updated_at DESC)
 """
 
+CREATE_TEST_CYCLES_TABLE = """
+CREATE TABLE IF NOT EXISTS test_cycles (
+    id              TEXT PRIMARY KEY,
+    name            TEXT NOT NULL,
+    description     TEXT NOT NULL DEFAULT '',
+    project_key     TEXT NOT NULL,
+    version_hint    TEXT NOT NULL DEFAULT '',
+    ticket_keys     TEXT NOT NULL DEFAULT '[]',
+    themes          TEXT NOT NULL DEFAULT '[]',
+    test_case_refs  TEXT NOT NULL DEFAULT '[]',
+    pinned          INTEGER NOT NULL DEFAULT 0,
+    archived        INTEGER NOT NULL DEFAULT 0,
+    last_run_at     TEXT,
+    last_run_id     TEXT,
+    run_count       INTEGER NOT NULL DEFAULT 0,
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL
+)
+"""
+
+CREATE_TEST_CYCLES_INDEX = """
+CREATE INDEX IF NOT EXISTS idx_test_cycles_pinned_updated
+    ON test_cycles (pinned DESC, updated_at DESC)
+"""
+
+CREATE_CYCLE_RUNS_TABLE = """
+CREATE TABLE IF NOT EXISTS cycle_runs (
+    id              TEXT PRIMARY KEY,
+    cycle_id        TEXT NOT NULL REFERENCES test_cycles(id) ON DELETE CASCADE,
+    session_id      TEXT,
+    started_at      TEXT NOT NULL,
+    finished_at     TEXT,
+    status          TEXT NOT NULL CHECK (
+                       status IN ('started','session_created','abandoned','completed','failed')
+                    ) DEFAULT 'started',
+    notes           TEXT NOT NULL DEFAULT ''
+)
+"""
+
+CREATE_CYCLE_RUNS_INDEX = """
+CREATE INDEX IF NOT EXISTS idx_cycle_runs_cycle
+    ON cycle_runs (cycle_id, started_at DESC)
+"""
+
 CREATE_MCP_CONNECTIONS_TABLE = """
 CREATE TABLE IF NOT EXISTS mcp_connections (
     id            TEXT PRIMARY KEY,

@@ -11,15 +11,15 @@ export type FeatureFlag =
   | "lightTheme";
 
 const DEFAULTS: Record<FeatureFlag, boolean> = {
-  workspaceSwitcher: false,
-  commandPalette: false,
-  regressionV2: false,
-  historyDrawer: false,
-  onboardingV2: false,
-  assistantV2: false,
-  liveTestingV2: false,
-  mcpV2: false,
-  testCycles: false,
+  workspaceSwitcher: true,
+  commandPalette: true,
+  regressionV2: true,
+  historyDrawer: true,
+  onboardingV2: true,
+  assistantV2: true,
+  liveTestingV2: true,
+  mcpV2: true,
+  testCycles: true,
   lightTheme: true, // keep the old light theme available while refactoring
 };
 

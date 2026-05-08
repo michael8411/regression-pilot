@@ -1,5 +1,4 @@
 export { McpConnectionsPanel } from "./McpConnectionsPanel";
-export { McpConnectionsOverlay } from "./McpConnectionsOverlay";
 export { ToolPickerTab } from "./ToolPickerTab";
 export { ToolApprovalCard } from "./ToolApprovalCard";
 export {

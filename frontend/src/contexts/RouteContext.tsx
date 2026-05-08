@@ -14,6 +14,12 @@ interface RouteState {
   route: Route;
   previousRoute: Route | null;
   workspace: Workspace | null;
+  /**
+   * Bumped whenever a query-only navigation happens (e.g. switching settings
+   * panes via `?pane=...`). Consumers that read `window.location.search`
+   * can include this in their memo deps to re-evaluate.
+   */
+  routeNonce: number;
 }
 
 interface RouteActions {
@@ -29,8 +35,10 @@ interface RouteActions {
   gotoConversation: (conversationId: string) => void;
   /** Navigate directly to a Live board. */
   gotoBoard: (boardId: string) => void;
-  /** Open the temporary MCP Connections overlay (Phase 9b). */
-  gotoMcpConnections: () => void;
+  /** Open the Settings overlay (Phase 11). */
+  gotoSettings: () => void;
+  /** Open Settings at a specific pane via `?pane=<id>` (Phase 11). */
+  gotoSettingsPane: (pane: string) => void;
 }
 
 type RouteContextValue = RouteState & RouteActions;
@@ -52,8 +60,7 @@ function isOverlay(route: Route): boolean {
   return (
     first === "settings" ||
     first === "onboarding" ||
-    first === "history" ||
-    first === "mcpConnections"
+    first === "history"
   );
 }
 
@@ -65,12 +72,25 @@ function workspaceHome(ws: Workspace): Route {
     : ["assistant", "home"];
 }
 
+function setSearchParam(name: string, value: string | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    const url = new URL(window.location.href);
+    if (value === null) url.searchParams.delete(name);
+    else url.searchParams.set(name, value);
+    window.history.replaceState({}, "", url.toString());
+  } catch {
+    // ignore — non-window environments (tests/SSR) don't need URL sync
+  }
+}
+
 export function RouteProvider({
   children,
   initialRoute = DEFAULT_ROUTE,
   onRouteChange,
 }: RouteProviderProps) {
   const [route, setRoute] = useState<Route>(initialRoute);
+  const [routeNonce, setRouteNonce] = useState<number>(0);
   const previousRef = useRef<Route | null>(null);
   const lastNonOverlayRef = useRef<Route>(
     isOverlay(initialRoute) ? DEFAULT_ROUTE : initialRoute,
@@ -100,6 +120,7 @@ export function RouteProvider({
   }, [goto]);
 
   const closeOverlay = useCallback(() => {
+    setSearchParam("pane", null);
     goto(lastNonOverlayRef.current);
   }, [goto]);
 
@@ -113,8 +134,18 @@ export function RouteProvider({
     [goto],
   );
 
-  const gotoMcpConnections = useCallback(
-    () => goto(["mcpConnections"]),
+  const gotoSettings = useCallback(() => {
+    setSearchParam("pane", null);
+    goto(["settings"]);
+    setRouteNonce((n) => n + 1);
+  }, [goto]);
+
+  const gotoSettingsPane = useCallback(
+    (pane: string) => {
+      setSearchParam("pane", pane);
+      goto(["settings"]);
+      setRouteNonce((n) => n + 1);
+    },
     [goto],
   );
 
@@ -123,23 +154,27 @@ export function RouteProvider({
       route,
       previousRoute: previousRef.current,
       workspace: workspaceOf(route),
+      routeNonce,
       goto,
       gotoWorkspace,
       back,
       closeOverlay,
       gotoConversation,
       gotoBoard,
-      gotoMcpConnections,
+      gotoSettings,
+      gotoSettingsPane,
     }),
     [
       route,
+      routeNonce,
       goto,
       gotoWorkspace,
       back,
       closeOverlay,
       gotoConversation,
       gotoBoard,
-      gotoMcpConnections,
+      gotoSettings,
+      gotoSettingsPane,
     ],
   );
 

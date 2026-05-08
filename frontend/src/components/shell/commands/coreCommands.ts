@@ -1,12 +1,16 @@
 import {
   ClipboardList,
+  Database,
   History,
+  Info,
   Kanban,
+  Key,
   Keyboard,
   Layers,
   MessageSquare,
   Plug,
   Settings as SettingsIcon,
+  SlidersHorizontal,
 } from "@/lib/icons";
 import { isFeatureEnabled } from "@/lib/featureFlags";
 import type { CommandItem } from "@/contexts/CommandRegistryContext";
@@ -21,9 +25,10 @@ export function coreCommands(args: {
   onOpenSettings: () => void;
   onOpenHistory: () => void;
   onOpenSetup: () => void;
-  onOpenMcpConnections: () => void;
+  onOpenSettingsPane: (pane: string) => void;
   onAddMcpConnection: () => void;
 }): CommandItem[] {
+  const settingsEnabled = isFeatureEnabled("settingsV2");
   const mcpEnabled = isFeatureEnabled("mcpV2");
   return [
     {
@@ -88,17 +93,66 @@ export function coreCommands(args: {
       keywords: ["onboarding", "configure", "first run", "setup"],
       action: { type: "run", run: args.onOpenSetup },
     },
-    ...(mcpEnabled
+    ...(settingsEnabled
       ? ([
           {
-            id: "jump.mcp-connections",
+            id: "settings.credentials",
             group: "jump",
-            label: "MCP: Connections",
+            label: "Settings: Credentials",
+            sub: "modal",
+            icon: Key,
+            keywords: ["jira", "gemini", "zephyr", "tokens", "credentials"],
+            action: { type: "run", run: () => args.onOpenSettingsPane("credentials") },
+          },
+          {
+            id: "settings.preferences",
+            group: "jump",
+            label: "Settings: Preferences",
+            sub: "modal",
+            icon: SlidersHorizontal,
+            keywords: ["theme", "preferences", "defaults"],
+            action: { type: "run", run: () => args.onOpenSettingsPane("preferences") },
+          },
+          {
+            id: "settings.connections",
+            group: "jump",
+            label: "Settings: Connections",
             sub: "modal",
             icon: Plug,
             keywords: ["mcp", "connections", "tools", "integrations"],
-            action: { type: "run", run: args.onOpenMcpConnections },
+            action: { type: "run", run: () => args.onOpenSettingsPane("connections") },
           },
+          {
+            id: "settings.data-privacy",
+            group: "jump",
+            label: "Settings: Data & privacy",
+            sub: "modal",
+            icon: Database,
+            keywords: ["export", "wipe", "data", "privacy"],
+            action: { type: "run", run: () => args.onOpenSettingsPane("data-privacy") },
+          },
+          {
+            id: "settings.shortcuts",
+            group: "jump",
+            label: "Settings: Shortcuts",
+            sub: "modal",
+            icon: Keyboard,
+            keywords: ["shortcuts", "keyboard", "keys"],
+            action: { type: "run", run: () => args.onOpenSettingsPane("shortcuts") },
+          },
+          {
+            id: "settings.about",
+            group: "jump",
+            label: "Settings: About",
+            sub: "modal",
+            icon: Info,
+            keywords: ["about", "version", "build"],
+            action: { type: "run", run: () => args.onOpenSettingsPane("about") },
+          },
+        ] satisfies CommandItem[])
+      : []),
+    ...(mcpEnabled
+      ? ([
           {
             id: "mcp.add-connection",
             group: "action",
@@ -117,8 +171,13 @@ export function coreCommands(args: {
       sub: "help",
       icon: Keyboard,
       keywords: ["cheatsheet", "keys"],
-      // Phase 11 swaps this with a shortcuts panel opener.
-      action: { type: "run", run: args.onOpenSettings },
+      action: {
+        type: "run",
+        run: () =>
+          settingsEnabled
+            ? args.onOpenSettingsPane("shortcuts")
+            : args.onOpenSettings(),
+      },
     },
   ];
 }

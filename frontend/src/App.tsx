@@ -27,10 +27,8 @@ import { HistoryDrawer } from "@/components/history";
 import { SetupWizard } from "@/components/onboarding";
 import { AssistantWorkspace } from "@/components/assistant";
 import { LiveWorkspace } from "@/components/live";
-import {
-  McpConnectionsOverlay,
-  requestOpenCreateDialog as requestOpenMcpDialog,
-} from "@/components/mcp";
+import { requestOpenCreateDialog as requestOpenMcpDialog } from "@/components/mcp";
+import { SettingsOverlay } from "@/components/settings";
 import { CyclesView } from "@/components/cycles";
 import { getConfigStatus } from "@/lib/api";
 import { RouteProvider, useRoute } from "@/contexts/RouteContext";
@@ -349,9 +347,6 @@ export default function App() {
       <RouteProvider initialRoute={initialRoute} onRouteChange={handleRouteChange}>
         <ShellCommandsBridge />
         <CoreCommandsBridge
-          onOpenSettings={() => {
-            /* Phase 11 wires settings. */
-          }}
           onOpenHistory={() => setHistoryOpen(true)}
           onOpenSetup={() => {
             localStorage.removeItem("onboarding.skipped");
@@ -388,7 +383,7 @@ export default function App() {
             }}
           />
         )}
-        {isFeatureEnabled("mcpV2") && <McpConnectionsOverlay />}
+        {isFeatureEnabled("settingsV2") && <SettingsOverlay />}
       </RouteProvider>
     </CommandRegistryProvider>
   );
@@ -400,23 +395,22 @@ function ShellCommandsBridge() {
 }
 
 function CoreCommandsBridge({
-  onOpenSettings,
   onOpenHistory,
   onOpenSetup,
 }: {
-  onOpenSettings: () => void;
   onOpenHistory: () => void;
   onOpenSetup: () => void;
 }) {
-  const { gotoMcpConnections } = useRoute();
-  const onOpenMcpConnections = useCallback(
-    () => gotoMcpConnections(),
-    [gotoMcpConnections],
+  const { gotoSettings, gotoSettingsPane } = useRoute();
+  const onOpenSettings = useCallback(() => gotoSettings(), [gotoSettings]);
+  const onOpenSettingsPane = useCallback(
+    (pane: string) => gotoSettingsPane(pane),
+    [gotoSettingsPane],
   );
   const onAddMcpConnection = useCallback(() => {
     requestOpenMcpDialog();
-    gotoMcpConnections();
-  }, [gotoMcpConnections]);
+    gotoSettingsPane("connections");
+  }, [gotoSettingsPane]);
 
   const commands = useMemo(
     () =>
@@ -424,14 +418,14 @@ function CoreCommandsBridge({
         onOpenSettings,
         onOpenHistory,
         onOpenSetup,
-        onOpenMcpConnections,
+        onOpenSettingsPane,
         onAddMcpConnection,
       }),
     [
       onOpenSettings,
       onOpenHistory,
       onOpenSetup,
-      onOpenMcpConnections,
+      onOpenSettingsPane,
       onAddMcpConnection,
     ],
   );
@@ -466,7 +460,7 @@ function ShellBridge({
   modelName,
   onOpenHistory,
 }: ShellBridgeProps) {
-  const { route } = useRoute();
+  const { route, gotoSettings } = useRoute();
   const { openPalette } = useCommandRegistry();
   const crumbs = useMemo(() => buildCrumbs(route), [route]);
 
@@ -480,9 +474,7 @@ function ShellBridge({
       version={version}
       modelName={modelName}
       onOpenHistory={onOpenHistory}
-      onOpenSettings={() => {
-        /* Phase 11: open settings overlay. */
-      }}
+      onOpenSettings={() => gotoSettings()}
       onCmdK={openPalette}
       onOpenProfile={() => {
         /* Later phase. */

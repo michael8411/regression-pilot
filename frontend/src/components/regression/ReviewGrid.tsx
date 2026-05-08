@@ -38,6 +38,15 @@ export function ReviewGrid() {
   const { state, isRestoring, saveState, saveStateImmediate } =
     useRegressionSession();
 
+  const onPushGoto = useCallback(
+    () => goto(["regression", "push"]),
+    [goto],
+  );
+  const onGenerateGoto = useCallback(
+    () => goto(["regression", "generate"]),
+    [goto],
+  );
+
   if (isRestoring) return <ReviewSkeleton />;
 
   if (state.testCases.length === 0) {
@@ -61,8 +70,8 @@ export function ReviewGrid() {
       testCases={state.testCases}
       saveState={saveState}
       saveStateImmediate={saveStateImmediate}
-      onPushGoto={() => goto(["regression", "push"])}
-      onGenerateGoto={() => goto(["regression", "generate"])}
+      onPushGoto={onPushGoto}
+      onGenerateGoto={onGenerateGoto}
     />
   );
 }

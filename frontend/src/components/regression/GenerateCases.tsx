@@ -40,6 +40,15 @@ export function GenerateCases() {
     saveStateBatch,
   } = useRegressionSession();
 
+  const onEditThemes = useCallback(
+    () => goto(["regression", "themes"]),
+    [goto],
+  );
+  const onContinueToReview = useCallback(
+    () => goto(["regression", "review"]),
+    [goto],
+  );
+
   if (isRestoring) return <GenerateSkeleton />;
 
   if (state.selectedTickets.length === 0) {
@@ -65,8 +74,8 @@ export function GenerateCases() {
       initialInstructions={state.instructions}
       saveState={saveState}
       saveStateBatch={saveStateBatch}
-      onEditThemes={() => goto(["regression", "themes"])}
-      onContinueToReview={() => goto(["regression", "review"])}
+      onEditThemes={onEditThemes}
+      onContinueToReview={onContinueToReview}
     />
   );
 }

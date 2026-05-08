@@ -40,7 +40,7 @@ export function McpAutoApproveEditor({ value, onChange }: Props) {
       <p className="text-[11px] text-ink-faint">
         Tool names listed here will run without asking for approval each time.
       </p>
-      <div className="flex items-center gap-2">
+      <div className="flex gap-2 items-center">
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -65,7 +65,7 @@ export function McpAutoApproveEditor({ value, onChange }: Props) {
             <span className="font-mono">{name}</span>
             <button
               type="button"
-              className="ml-1 inline-flex items-center text-info hover:text-ink"
+              className="inline-flex items-center ml-1 text-info hover:text-ink"
               onClick={() => remove(name)}
               aria-label={`Remove ${name}`}
             >

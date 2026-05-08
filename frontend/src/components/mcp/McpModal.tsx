@@ -39,7 +39,7 @@ export function McpModal({
       aria-modal="true"
       aria-label={ariaLabel ?? title}
       onClick={onClose}
-      className="fixed inset-0 z-[7800] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in"
+      className="fixed inset-0 z-[8000] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in"
     >
       <div
         onClick={(e) => e.stopPropagation()}

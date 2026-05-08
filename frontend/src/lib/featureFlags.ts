@@ -8,6 +8,7 @@ export type FeatureFlag =
   | "liveTestingV2"
   | "mcpV2"
   | "testCycles"
+  | "settingsV2"
   | "lightTheme";
 
 const DEFAULTS: Record<FeatureFlag, boolean> = {
@@ -20,6 +21,7 @@ const DEFAULTS: Record<FeatureFlag, boolean> = {
   liveTestingV2: true,
   mcpV2: true,
   testCycles: true,
+  settingsV2: true,
   lightTheme: true, // keep the old light theme available while refactoring
 };
 

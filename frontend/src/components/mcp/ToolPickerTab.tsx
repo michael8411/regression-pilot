@@ -12,7 +12,7 @@ import { useRoute } from "@/contexts/RouteContext";
 
 export function ToolPickerTab() {
   const { connections } = useMcpConnections();
-  const { gotoMcpConnections } = useRoute();
+  const { gotoSettingsPane } = useRoute();
   const enabled = useMemo(
     () => connections.filter((c) => c.enabled),
     [connections],
@@ -64,7 +64,7 @@ export function ToolPickerTab() {
         </p>
         <button
           type="button"
-          onClick={() => gotoMcpConnections()}
+          onClick={() => gotoSettingsPane("connections")}
           className="mt-2 text-[11.5px] text-accent-text hover:underline"
         >
           Manage connections

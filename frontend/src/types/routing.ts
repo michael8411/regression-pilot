@@ -27,11 +27,7 @@ export type LiveScreen = "home" | "board" | "pinned";
 export type AssistantScreen = "home" | "conversation";
 
 /** Screens that exist outside any workspace — rendered over the shell. */
-export type OverlayScreen =
-  | "settings"
-  | "onboarding"
-  | "history"
-  | "mcpConnections";
+export type OverlayScreen = "settings" | "onboarding" | "history";
 
 export type Route =
   | ["regression", RegressionScreen]
@@ -92,13 +88,12 @@ export const ROUTE_LABELS: {
     settings:   "Settings",
     onboarding: "Onboarding",
     history:    "History",
-    mcpConnections: "Connections",
   },
 };
 
 const VALID_REGRESSION: RegressionScreen[] =
   ["home", "workbench", "themes", "generate", "review", "push", "cycles"];
-const VALID_OVERLAYS:  OverlayScreen[]   = ["settings", "onboarding", "history", "mcpConnections"];
+const VALID_OVERLAYS:  OverlayScreen[]   = ["settings", "onboarding", "history"];
 
 /** Defensive parser for session-restored routes. Returns null on any deviation. */
 export function parseRoute(raw: unknown): Route | null {

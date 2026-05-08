@@ -9,12 +9,16 @@ try:
         CredentialsUpdateRequest,
         PreferencesUpdateRequest,
     )
+    from backend.schemas.data_models import DataWipeRequest
     from backend.services.config_service import update_keyring_credentials
+    from backend.services.data_service import export_state, wipe_state
 except ImportError:  # pragma: no cover - supports running from backend/ as script
     from config.preferences import read_preferences, write_preferences
     from config.settings import get_settings
     from schemas.request_models import CredentialsUpdateRequest, PreferencesUpdateRequest
+    from schemas.data_models import DataWipeRequest
     from services.config_service import update_keyring_credentials
+    from services.data_service import export_state, wipe_state
 
 
 logger = structlog.get_logger("testdeck.config_routes")
@@ -137,3 +141,15 @@ async def test_zephyr():
         return {"ok": False, "error": f"Zephyr returned {e.response.status_code}"}
     except Exception as e:
         return {"ok": False, "error": str(e)}
+
+
+@router.post("/data/export")
+async def export_data():
+    """Return a JSON snapshot of local data. Tokens are excluded."""
+    return await export_state()
+
+
+@router.post("/data/wipe")
+async def wipe_data(req: DataWipeRequest):
+    """Wipe all local data tables. Requires `confirmation: "WIPE"`."""
+    return await wipe_state(keep_credentials=req.keepCredentials)

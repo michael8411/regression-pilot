@@ -102,6 +102,9 @@ async def save_state(session_id: str, key: str, value: Any) -> list[dict]:
     encrypted = encrypt_value(json_str)
     now = datetime.now(timezone.utc).isoformat()
     async with get_connection() as db:
+        cursor = await db.execute("SELECT id FROM sessions WHERE id = ?", (session_id,))
+        if not await cursor.fetchone():
+            raise LookupError(f"Session {session_id} not found")
         await db.execute("BEGIN IMMEDIATE")
         await db.execute(
             """
@@ -143,6 +146,9 @@ async def save_state_batch(session_id: str, items: dict) -> list[dict]:
         prepared.append((key, encrypt_value(json_str)))
 
     async with get_connection() as db:
+        cursor = await db.execute("SELECT id FROM sessions WHERE id = ?", (session_id,))
+        if not await cursor.fetchone():
+            raise LookupError(f"Session {session_id} not found")
         await db.execute("BEGIN IMMEDIATE")
         for key, encrypted in prepared:
             await db.execute(

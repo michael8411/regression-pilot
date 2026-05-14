@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException
 
 try:
     from backend.schemas.live_models import (
+        ContextMetadataEnvelope,
         CreateLiveBoardRequest,
         LiveActivityCreate,
         LiveActivityEvent,
@@ -16,10 +17,12 @@ try:
         LivePinnedTicketUpsert,
         LivePublishCasesRequest,
         LivePublishCasesResponse,
+        RoutingDecisionEnvelope,
         UpdateLiveBoardRequest,
     )
     from backend.services import (
         ai_service,
+        context_bundle_service,
         live_artifact_service,
         live_board_service,
         live_publish_service,
@@ -27,6 +30,7 @@ try:
     from backend.utils.http_errors import upstream_error
 except ImportError:  # pragma: no cover - supports running from backend/ as script
     from schemas.live_models import (
+        ContextMetadataEnvelope,
         CreateLiveBoardRequest,
         LiveActivityCreate,
         LiveActivityEvent,
@@ -39,10 +43,12 @@ except ImportError:  # pragma: no cover - supports running from backend/ as scri
         LivePinnedTicketUpsert,
         LivePublishCasesRequest,
         LivePublishCasesResponse,
+        RoutingDecisionEnvelope,
         UpdateLiveBoardRequest,
     )
     from services import (
         ai_service,
+        context_bundle_service,
         live_artifact_service,
         live_board_service,
         live_publish_service,
@@ -117,9 +123,40 @@ async def delete_board(board_id: str):
 
 @router.post("/generate")
 async def live_generate(req: LiveGenerateRequest):
-    """Generate test cases for a single ticket. Skips grouping."""
+    """Generate test cases for a single ticket. Skips grouping.
+
+    When `use_context_bundle=True`, the request goes through the Phase 1
+    routed-context pipeline and the response includes a context_metadata
+    envelope. Otherwise we preserve the legacy direct-ticket path so no
+    existing caller breaks.
+    """
     try:
-        return await ai_service.generate_test_cases([req.ticket], req.instructions)
+        if not req.use_context_bundle:
+            return await ai_service.generate_test_cases([req.ticket], req.instructions)
+
+        bundle = await context_bundle_service.build_context_bundle(req.ticket)
+        cases = await ai_service.generate_test_cases_from_bundle(
+            bundle, req.instructions
+        )
+        meta = ContextMetadataEnvelope(
+            providers_called=list(bundle.tool_trace.providers_called),
+            routing_decisions=[
+                RoutingDecisionEnvelope(
+                    provider=d.provider, included=d.included, reasons=list(d.reasons)
+                )
+                for d in bundle.tool_trace.routing_decisions
+            ],
+            latency_ms=dict(bundle.tool_trace.latency_ms),
+            errors=[e.model_dump() for e in bundle.tool_trace.errors],
+            input_chars=bundle.budget.input_chars,
+            per_section_chars=dict(bundle.budget.per_section_chars),
+            hard_cap_chars=bundle.budget.hard_cap_chars,
+            truncated_sections=list(bundle.budget.truncated_sections),
+        )
+        return {
+            "test_cases": cases.get("test_cases", []),
+            "context_metadata": meta.model_dump(),
+        }
     except Exception as e:
         raise upstream_error("Gemini", e)
 

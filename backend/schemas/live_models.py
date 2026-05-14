@@ -118,6 +118,35 @@ class BoardResponse(BaseModel):
 class LiveGenerateRequest(BaseModel):
     ticket: dict
     instructions: str = ""
+    use_context_bundle: bool = False  # Phase 1 opt-in for the routed path
+
+
+class RoutingDecisionEnvelope(BaseModel):
+    provider: str
+    included: bool
+    reasons: list[str] = Field(default_factory=list)
+
+
+class ContextMetadataEnvelope(BaseModel):
+    """Diagnostics returned alongside generation output (Phase 1).
+
+    Surfaces tool trace + budget stats + routing reasons so the UI and
+    telemetry can show *why* a generation chose its context.
+    """
+
+    providers_called: list[str] = Field(default_factory=list)
+    routing_decisions: list[RoutingDecisionEnvelope] = Field(default_factory=list)
+    latency_ms: dict[str, int] = Field(default_factory=dict)
+    errors: list[dict] = Field(default_factory=list)
+    input_chars: int = 0
+    per_section_chars: dict[str, int] = Field(default_factory=dict)
+    hard_cap_chars: int = 0
+    truncated_sections: list[str] = Field(default_factory=list)
+
+
+class LiveGenerateResponse(BaseModel):
+    test_cases: list[dict] = Field(default_factory=list)
+    context_metadata: Optional[ContextMetadataEnvelope] = None
 
 
 class SecretScanWarning(BaseModel):

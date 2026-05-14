@@ -118,7 +118,9 @@ class BoardResponse(BaseModel):
 class LiveGenerateRequest(BaseModel):
     ticket: dict
     instructions: str = ""
-    use_context_bundle: bool = False  # Phase 1 opt-in for the routed path
+    # Phase 3 makes the routed-context pipeline the default. Set false to
+    # fall back to the legacy direct-ticket prompt (kept for diagnostic use).
+    use_context_bundle: bool = True
 
 
 class RoutingDecisionEnvelope(BaseModel):

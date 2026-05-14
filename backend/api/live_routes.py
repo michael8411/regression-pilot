@@ -22,11 +22,12 @@ try:
     )
     from backend.services import (
         ai_service,
-        context_bundle_service,
+        context_orchestrator,
         live_artifact_service,
         live_board_service,
         live_publish_service,
     )
+    from backend.services.context_orchestrator import AtlassianContextRequired
     from backend.utils.http_errors import upstream_error
 except ImportError:  # pragma: no cover - supports running from backend/ as script
     from schemas.live_models import (
@@ -48,11 +49,12 @@ except ImportError:  # pragma: no cover - supports running from backend/ as scri
     )
     from services import (
         ai_service,
-        context_bundle_service,
+        context_orchestrator,
         live_artifact_service,
         live_board_service,
         live_publish_service,
     )
+    from services.context_orchestrator import AtlassianContextRequired
     from utils.http_errors import upstream_error
 
 
@@ -125,16 +127,22 @@ async def delete_board(board_id: str):
 async def live_generate(req: LiveGenerateRequest):
     """Generate test cases for a single ticket. Skips grouping.
 
-    When `use_context_bundle=True`, the request goes through the Phase 1
-    routed-context pipeline and the response includes a context_metadata
-    envelope. Otherwise we preserve the legacy direct-ticket path so no
-    existing caller breaks.
+    Phase 3: routes through the context orchestrator by default and
+    returns a `context_metadata` envelope so the UI can render the
+    "Using tools" indicator and surface budget/diagnostics. The legacy
+    direct-ticket path is preserved behind `use_context_bundle=False`.
     """
     try:
         if not req.use_context_bundle:
             return await ai_service.generate_test_cases([req.ticket], req.instructions)
 
-        bundle = await context_bundle_service.build_context_bundle(req.ticket)
+        try:
+            bundle = await context_orchestrator.build_for_ticket(req.ticket)
+        except AtlassianContextRequired as exc:
+            # Atlassian is the source of truth — abort generation rather
+            # than serve a low-quality result without the ticket.
+            raise upstream_error("Atlassian", exc)
+
         cases = await ai_service.generate_test_cases_from_bundle(
             bundle, req.instructions
         )
@@ -157,6 +165,8 @@ async def live_generate(req: LiveGenerateRequest):
             "test_cases": cases.get("test_cases", []),
             "context_metadata": meta.model_dump(),
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise upstream_error("Gemini", e)
 

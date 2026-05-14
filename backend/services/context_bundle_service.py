@@ -46,6 +46,8 @@ try:
         SqlServerAdapter,
         ZephyrReadAdapter,
     )
+    from backend.services.provider_adapters.github import parse_github_pr
+    from backend.services.provider_adapters.ado import parse_ado_pr
 except ImportError:  # pragma: no cover
     from schemas.context_bundle_models import (
         ContextBundle,
@@ -76,6 +78,8 @@ except ImportError:  # pragma: no cover
         SqlServerAdapter,
         ZephyrReadAdapter,
     )
+    from services.provider_adapters.github import parse_github_pr
+    from services.provider_adapters.ado import parse_ado_pr
 
 
 _MIN_DESCRIPTION_CHARS = 80
@@ -233,32 +237,61 @@ async def build_context_bundle(
             lambda: adapters.atlassian.fetch_ticket(signals.key),
             assign=lambda v: setattr(bundle, "ticket", v),
         )
+        # Atlassian is the source of truth — when the adapter is wired but
+        # fails, callers (orchestrator) decide whether to abort. We record
+        # the error in the trace; the orchestrator may inspect it.
 
-    # Code context — github XOR ado per routing plan.
+    # Code context — github XOR ado per routing plan. Extract PR coordinates
+    # from dev links so the adapter knows which PR to fetch.
     repo_provider = _repo_provider_to_call(plan)
+    dev_links = list(signals.development_links)
     if repo_provider == "github" and adapters.github is not None:
-        await _run_adapter(
-            "github",
-            trace,
-            lambda: adapters.github.fetch_pr_context(
-                repo_full_name="",  # adapter resolves from mapping in Phase 3
-                pr_number=0,
-                max_files=plan.max_changed_files,
-            ),
-            assign=lambda v: setattr(bundle, "code_context", v),
-        )
+        gh_coords = parse_github_pr(dev_links)
+        if gh_coords is None:
+            trace.providers_called.append("github")
+            trace.errors.append(
+                ProviderError(
+                    provider="github",
+                    code="unavailable",
+                    message="no GitHub PR URL in development links",
+                )
+            )
+        else:
+            owner, repo, pr_number = gh_coords
+            await _run_adapter(
+                "github",
+                trace,
+                lambda: adapters.github.fetch_pr_context(
+                    repo_full_name=f"{owner}/{repo}",
+                    pr_number=pr_number,
+                    max_files=plan.max_changed_files,
+                ),
+                assign=lambda v: setattr(bundle, "code_context", v),
+            )
     elif repo_provider == "ado" and adapters.ado is not None:
-        await _run_adapter(
-            "ado",
-            trace,
-            lambda: adapters.ado.fetch_pr_context(
-                project="",
-                repo="",
-                pr_id=0,
-                max_files=plan.max_changed_files,
-            ),
-            assign=lambda v: setattr(bundle, "code_context", v),
-        )
+        ado_coords = parse_ado_pr(dev_links)
+        if ado_coords is None:
+            trace.providers_called.append("ado")
+            trace.errors.append(
+                ProviderError(
+                    provider="ado",
+                    code="unavailable",
+                    message="no Azure DevOps PR URL in development links",
+                )
+            )
+        else:
+            _org, project, repo, pr_id = ado_coords
+            await _run_adapter(
+                "ado",
+                trace,
+                lambda: adapters.ado.fetch_pr_context(
+                    project=project,
+                    repo=repo,
+                    pr_id=pr_id,
+                    max_files=plan.max_changed_files,
+                ),
+                assign=lambda v: setattr(bundle, "code_context", v),
+            )
 
     if _is_included(plan, "sql_server") and adapters.sql_server is not None:
         await _run_adapter(

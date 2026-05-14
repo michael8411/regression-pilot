@@ -9,6 +9,7 @@ import type {
   LiveBoardProfile,
   LiveBoardViewPreferences,
   LiveCaseUpdateEntry,
+  LiveGenerateResponse,
   LiveGeneratedCases,
   LiveGeneratedCasesStatus,
   LivePinnedTicket,
@@ -151,7 +152,7 @@ export function doJiraTransition(
 export function liveGenerate(
   ticket: JiraTicket,
   instructions = "",
-): Promise<GeneratedTestCases> {
+): Promise<LiveGenerateResponse> {
   return jfetch("/live/generate", {
     method: "POST",
     body: JSON.stringify({ ticket, instructions }),

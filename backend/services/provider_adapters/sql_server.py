@@ -1,8 +1,12 @@
-"""SQL Server adapter stub. Concrete implementation lands in Phase 3.
+"""SQL Server adapter — Phase 3.
 
-Notes for Phase 3 implementers:
-- Must be read-only and pointed at non-production by configuration.
-- Scope queries to inferred tables/procs; never dump full schema.
+We do not yet have a concrete SQL Server provider in this codebase; the
+SQL MCP integration lands in a follow-up. The adapter is implemented as
+an unavailable provider so the orchestrator records a graceful skip in
+the tool trace without aborting generation.
+
+When a concrete MCP/REST integration arrives, replace `_fetch` and keep
+the rest of the surface the same.
 """
 
 from __future__ import annotations
@@ -15,7 +19,9 @@ except ImportError:  # pragma: no cover
     from schemas.context_bundle_models import DbContext
 
 
-class SqlServerAdapterStub(SqlServerAdapter):
+class SqlServerStubAdapter(SqlServerAdapter):
+    """Unavailable provider — Phase 3 placeholder for SQL MCP/REST hookup."""
+
     async def health(self) -> bool:
         return False
 
@@ -25,4 +31,7 @@ class SqlServerAdapterStub(SqlServerAdapter):
         tables: list[str],
         include_procs: bool = False,
     ) -> DbContext:
-        raise AdapterUnavailable("sql_server", "not implemented in phase 1")
+        raise AdapterUnavailable("sql_server", "sql server provider not configured")
+
+
+SqlServerAdapterStub = SqlServerStubAdapter

@@ -1,4 +1,4 @@
-import type { JiraTicket } from "@/types";
+import type { GeneratedTestCases, JiraTicket } from "@/types";
 
 // =============================================================================
 // Live boards — API payload shape
@@ -291,4 +291,25 @@ export interface LiveActivityEvent {
   summary: string;
   detail: string;
   created_at: string;
+}
+
+export interface RoutingDecisionMeta {
+  provider: string;
+  included: boolean;
+  reasons: string[];
+}
+
+export interface ContextMetadata {
+  providers_called: string[];
+  routing_decisions: RoutingDecisionMeta[];
+  latency_ms: Record<string, number>;
+  errors: { provider: string; code: string; message: string }[];
+  input_chars: number;
+  per_section_chars: Record<string, number>;
+  hard_cap_chars: number;
+  truncated_sections: string[];
+}
+
+export interface LiveGenerateResponse extends GeneratedTestCases {
+  context_metadata?: ContextMetadata;
 }

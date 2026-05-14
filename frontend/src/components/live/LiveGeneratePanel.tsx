@@ -235,7 +235,7 @@ export function LiveGeneratePanel({ ticket, onClose }: Props) {
   const [options, setOptions] = useState<LiveGenerateOptions>(
     DEFAULT_GENERATE_OPTIONS,
   );
-  const { generate, generating, result, error, reset } = useLiveGenerate();
+  const { generate, generating, result, error, reset, toolsUsed } = useLiveGenerate();
   const { save: persistCases } = useLiveGeneratedCases(ticket.key);
   const activity = useOptionalLiveActivityFeed();
 
@@ -336,6 +336,22 @@ export function LiveGeneratePanel({ ticket, onClose }: Props) {
           className="mt-2 text-[11.5px] text-err bg-err/[0.06] border border-err/30 rounded-md px-2 py-1.5"
         >
           {error}
+        </div>
+      )}
+
+      {(generating || toolsUsed.length > 0) && (
+        <div className="mt-2 font-mono text-[10.5px] text-ink-muted truncate">
+          Using tools:{" "}
+          {generating && toolsUsed.length === 0 ? (
+            <span className="text-ink-muted">routing…</span>
+          ) : (
+            toolsUsed.map((t, i) => (
+              <span key={t}>
+                {i > 0 && <span className="text-ink-faint">, </span>}
+                <span className="text-accent-text">{t}</span>
+              </span>
+            ))
+          )}
         </div>
       )}
 

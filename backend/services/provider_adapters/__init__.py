@@ -1,8 +1,9 @@
-"""Provider adapter interfaces.
+"""Provider adapter interfaces and concrete implementations.
 
-Phase 1 ships interface stubs only. Each adapter is responsible for converting
-a provider's raw response into the normalized ContextBundle subsections.
-Concrete fetching is implemented in Phase 3.
+The abstract surface lives in `base`; concrete adapters in their domain
+module. Adapters convert provider-specific payloads into the normalized
+ContextBundle subsections — no raw provider responses leak past this
+layer.
 """
 
 from .base import (
@@ -14,13 +15,25 @@ from .base import (
     SqlServerAdapter,
     ZephyrReadAdapter,
 )
+from .atlassian import AtlassianTicketAdapter
+from .github import GithubRestAdapter, parse_github_pr
+from .ado import AdoRestAdapter, parse_ado_pr
+from .sql_server import SqlServerStubAdapter
+from .zephyr_read import ZephyrRestReadAdapter
 
 __all__ = [
     "AdapterUnavailable",
     "AtlassianAdapter",
+    "AtlassianTicketAdapter",
     "AdoAdapter",
+    "AdoRestAdapter",
     "GithubAdapter",
+    "GithubRestAdapter",
     "ProviderAdapter",
     "SqlServerAdapter",
+    "SqlServerStubAdapter",
     "ZephyrReadAdapter",
+    "ZephyrRestReadAdapter",
+    "parse_github_pr",
+    "parse_ado_pr",
 ]

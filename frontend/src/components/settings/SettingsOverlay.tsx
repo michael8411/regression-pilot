@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { X } from "@/lib/icons";
-import { Button, IconButton } from "@/components/ui";
+import { IconButton } from "@/components/ui";
 import { useRoute } from "@/contexts/RouteContext";
 import { isFeatureEnabled } from "@/lib/featureFlags";
 import { SettingsRail, type SettingsPaneId } from "./SettingsRail";
 import { CredentialsPane } from "./panes/CredentialsPane";
 import { PreferencesPane } from "./panes/PreferencesPane";
 import { ConnectionsPane } from "./panes/ConnectionsPane";
+import { RepoMappingPane } from "./panes/RepoMappingPane";
 import { DataPrivacyPane } from "./panes/DataPrivacyPane";
 import { ShortcutsPane } from "./panes/ShortcutsPane";
 import { AboutPane } from "./panes/AboutPane";
@@ -16,6 +17,7 @@ const PANES: SettingsPaneId[] = [
   "credentials",
   "preferences",
   "connections",
+  "repo-mapping",
   "data-privacy",
   "shortcuts",
   "about",
@@ -81,14 +83,11 @@ export function SettingsOverlay() {
           width: "min(960px, 92vw)",
           height: "min(720px, 88vh)",
         }}
-        className="rounded-xl border border-subtle bg-surface-elevated shadow-float flex flex-col overflow-hidden focus:outline-none"
+        className="flex overflow-hidden flex-col rounded-xl border border-subtle bg-surface-elevated shadow-float focus:outline-none"
       >
-        <header className="flex items-center justify-between px-5 py-3 border-b border-subtle">
+        <header className="flex justify-between items-center px-5 py-3 border-b border-subtle">
           <h1 className="text-[14px] font-semibold text-ink">Settings</h1>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={closeOverlay}>
-              Done
-            </Button>
+          <div className="flex gap-2 items-center">
             <IconButton
               size="sm"
               aria-label="Close"
@@ -99,7 +98,7 @@ export function SettingsOverlay() {
         </header>
         <div className="flex flex-1 min-h-0">
           <SettingsRail active={pane} />
-          <section className="flex-1 min-w-0 overflow-auto bg-surface">
+          <section className="overflow-auto flex-1 min-w-0 bg-surface">
             {renderPane(pane)}
           </section>
         </div>
@@ -117,6 +116,8 @@ function renderPane(pane: SettingsPaneId) {
       return <PreferencesPane />;
     case "connections":
       return <ConnectionsPane />;
+    case "repo-mapping":
+      return <RepoMappingPane />;
     case "data-privacy":
       return <DataPrivacyPane />;
     case "shortcuts":

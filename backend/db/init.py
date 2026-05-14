@@ -23,6 +23,7 @@ try:
         CREATE_LIVE_ACTIVITY_TABLE,
         CREATE_LIVE_ACTIVITY_CREATED_INDEX,
         CREATE_LIVE_ACTIVITY_BOARD_INDEX,
+        CREATE_PROJECT_REPO_MAP_TABLE,
     )
     from backend.utils.crypto import encrypt_value, get_encryptor
 except ImportError:  # pragma: no cover - supports running from backend/ as script
@@ -48,6 +49,7 @@ except ImportError:  # pragma: no cover - supports running from backend/ as scri
         CREATE_LIVE_ACTIVITY_TABLE,
         CREATE_LIVE_ACTIVITY_CREATED_INDEX,
         CREATE_LIVE_ACTIVITY_BOARD_INDEX,
+        CREATE_PROJECT_REPO_MAP_TABLE,
     )
     from utils.crypto import encrypt_value, get_encryptor
 
@@ -82,6 +84,7 @@ async def init_db() -> None:
         await db.execute(CREATE_LIVE_ACTIVITY_TABLE)
         await db.execute(CREATE_LIVE_ACTIVITY_CREATED_INDEX)
         await db.execute(CREATE_LIVE_ACTIVITY_BOARD_INDEX)
+        await db.execute(CREATE_PROJECT_REPO_MAP_TABLE)
         await db.commit()
 
         get_encryptor()

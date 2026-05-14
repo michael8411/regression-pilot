@@ -45,6 +45,13 @@ class CredentialsUpdateRequest(BaseModel):
     gemini_api_key: SecretStr | None = None
     zephyr_base_url: HttpUrl | None = None
     zephyr_api_token: SecretStr | None = None
+    github_access_token: SecretStr | None = None
+    ado_org: str | None = None
+    ado_access_token: SecretStr | None = None
+
+
+class DisconnectServiceRequest(BaseModel):
+    service: Literal["jira", "github", "ado", "gemini", "zephyr"]
 
 class CreateSessionRequest(BaseModel):
     project_key: str

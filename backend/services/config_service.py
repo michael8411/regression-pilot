@@ -7,10 +7,14 @@ from google import genai
 
 try:
     from backend.config.settings import Settings, get_settings
-    from backend.utils.keyring_store import get_credential, set_credential
+    from backend.utils.keyring_store import (
+        delete_credential,
+        get_credential,
+        set_credential,
+    )
 except ImportError:  # pragma: no cover - supports running from backend/ as script
     from config.settings import Settings, get_settings
-    from utils.keyring_store import get_credential, set_credential
+    from utils.keyring_store import delete_credential, get_credential, set_credential
 
 
 logger = structlog.get_logger("testdeck.config_service")
@@ -24,6 +28,9 @@ _FIELD_TO_KEYRING_KEY: dict[str, str] = {
     "gemini_api_key": "gemini_api_key",
     "zephyr_base_url": "zephyr_base_url",
     "zephyr_api_token": "zephyr_api_token",
+    "github_access_token": "github_access_token",
+    "ado_org": "ado_org",
+    "ado_access_token": "ado_access_token",
 }
 
 _KEYRING_KEY_TO_ENV: dict[str, str] = {
@@ -33,6 +40,9 @@ _KEYRING_KEY_TO_ENV: dict[str, str] = {
     "gemini_api_key": "GEMINI_API_KEY",
     "zephyr_base_url": "ZEPHYR_BASE_URL",
     "zephyr_api_token": "ZEPHYR_API_TOKEN",
+    "github_access_token": "GITHUB_ACCESS_TOKEN",
+    "ado_org": "ADO_ORG",
+    "ado_access_token": "ADO_ACCESS_TOKEN",
 }
 
 
@@ -51,6 +61,21 @@ def update_keyring_credentials(updates: dict) -> list[str]:
         logger.info("credentials_updated", fields=sorted(written))
 
     return sorted(written)
+
+
+def delete_keyring_credentials(fields: list[str]) -> list[str]:
+    """Remove credential values from the OS keyring."""
+    cleared: list[str] = []
+    for field in fields:
+        kr_key = _FIELD_TO_KEYRING_KEY.get(field)
+        if kr_key is None:
+            continue
+        delete_credential(kr_key)
+        cleared.append(field)
+    if cleared:
+        get_settings.cache_clear()
+        logger.info("credentials_cleared", fields=sorted(cleared))
+    return sorted(cleared)
 
 
 def migrate_env_to_keyring() -> bool:

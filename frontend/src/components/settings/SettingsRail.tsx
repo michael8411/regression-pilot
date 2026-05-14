@@ -1,6 +1,7 @@
 import { clsx } from "clsx";
 import {
   Database,
+  Folder,
   Info,
   Key,
   Keyboard,
@@ -14,6 +15,7 @@ export type SettingsPaneId =
   | "credentials"
   | "preferences"
   | "connections"
+  | "repo-mapping"
   | "data-privacy"
   | "shortcuts"
   | "about";
@@ -28,6 +30,7 @@ export const SETTINGS_PANES: RailItem[] = [
   { id: "credentials",  label: "Credentials",    icon: Key },
   { id: "preferences",  label: "Preferences",    icon: SlidersHorizontal },
   { id: "connections",  label: "Connections",    icon: Plug },
+  { id: "repo-mapping", label: "Repo Mapping",   icon: Folder },
   { id: "data-privacy", label: "Data & privacy", icon: Database },
   { id: "shortcuts",    label: "Shortcuts",      icon: Keyboard },
   { id: "about",        label: "About",          icon: Info },

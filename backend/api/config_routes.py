@@ -7,18 +7,31 @@ try:
     from backend.config.settings import get_settings
     from backend.schemas.request_models import (
         CredentialsUpdateRequest,
+        DisconnectServiceRequest,
         PreferencesUpdateRequest,
     )
     from backend.schemas.data_models import DataWipeRequest
-    from backend.services.config_service import update_keyring_credentials
+    from backend.services.config_service import (
+        delete_keyring_credentials,
+        update_keyring_credentials,
+    )
     from backend.services.data_service import export_state, wipe_state
+    from backend.services import ado_service, github_service
 except ImportError:  # pragma: no cover - supports running from backend/ as script
     from config.preferences import read_preferences, write_preferences
     from config.settings import get_settings
-    from schemas.request_models import CredentialsUpdateRequest, PreferencesUpdateRequest
+    from schemas.request_models import (
+        CredentialsUpdateRequest,
+        DisconnectServiceRequest,
+        PreferencesUpdateRequest,
+    )
     from schemas.data_models import DataWipeRequest
-    from services.config_service import update_keyring_credentials
+    from services.config_service import (
+        delete_keyring_credentials,
+        update_keyring_credentials,
+    )
     from services.data_service import export_state, wipe_state
+    from services import ado_service, github_service
 
 
 logger = structlog.get_logger("testdeck.config_routes")
@@ -31,6 +44,17 @@ _FIELD_TO_KEYRING_KEY: dict[str, str] = {
     "gemini_api_key": "gemini_api_key",
     "zephyr_base_url": "zephyr_base_url",
     "zephyr_api_token": "zephyr_api_token",
+    "github_access_token": "github_access_token",
+    "ado_org": "ado_org",
+    "ado_access_token": "ado_access_token",
+}
+
+_SERVICE_FIELDS: dict[str, list[str]] = {
+    "jira": ["jira_base_url", "jira_email", "jira_api_token"],
+    "github": ["github_access_token"],
+    "ado": ["ado_org", "ado_access_token"],
+    "gemini": ["gemini_api_key"],
+    "zephyr": ["zephyr_base_url", "zephyr_api_token"],
 }
 
 
@@ -43,7 +67,15 @@ async def config_status():
             "base_url": settings.jira_base_url or None,
             "email": settings.jira_email or None,
         },
+        "github": {
+            "configured": settings.github_configured,
+        },
+        "ado": {
+            "configured": settings.ado_configured,
+            "org": settings.ado_org or None,
+        },
         "ai": {"configured": bool(settings.gemini_api_key)},
+        "gemini": {"configured": bool(settings.gemini_api_key)},
         "zephyr": {"configured": bool(settings.zephyr_api_token)},
     }
 
@@ -76,6 +108,16 @@ async def update_credentials(req: CredentialsUpdateRequest):
     logger.info("credentials_endpoint_updated", updated=written)
 
     return {"updated": written}
+
+
+@router.post("/disconnect")
+async def disconnect_service(req: DisconnectServiceRequest):
+    fields = _SERVICE_FIELDS.get(req.service, [])
+    if not fields:
+        raise HTTPException(status_code=400, detail=f"Unknown service: {req.service}")
+    cleared = delete_keyring_credentials(fields)
+    logger.info("service_disconnected", service=req.service, cleared=cleared)
+    return {"service": req.service, "cleared": cleared}
 
 
 @router.get("/test-jira")
@@ -141,6 +183,34 @@ async def test_zephyr():
         return {"ok": False, "error": f"Zephyr returned {e.response.status_code}"}
     except Exception as e:
         return {"ok": False, "error": str(e)}
+
+
+@router.get("/test-github")
+async def test_github():
+    s = get_settings()
+    if not s.github_configured:
+        raise HTTPException(status_code=422, detail="GitHub access token not configured")
+    return await github_service.test_connection()
+
+
+@router.get("/test-ado")
+async def test_ado():
+    s = get_settings()
+    if not s.ado_configured:
+        raise HTTPException(
+            status_code=422, detail="Azure DevOps org or token not configured"
+        )
+    return await ado_service.test_connection()
+
+
+@router.get("/github/repos")
+async def github_repos():
+    return {"repos": await github_service.list_repo_suggestions()}
+
+
+@router.get("/ado/repos")
+async def ado_repos():
+    return {"repos": await ado_service.list_repo_suggestions()}
 
 
 @router.post("/data/export")

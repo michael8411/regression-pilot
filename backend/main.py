@@ -17,6 +17,7 @@ try:
     from backend.api.live_routes import router as live_router
     from backend.api.mcp_routes import router as mcp_router
     from backend.api.cycle_routes import router as cycle_router
+    from backend.api.project_repo_map_routes import router as repo_map_router
     from backend.services.mcp.runtime import get_runtime as get_mcp_runtime
     from backend.config.logging_config import setup_logging
     from backend.config.settings import get_settings
@@ -34,6 +35,7 @@ except ImportError:  # pragma: no cover - supports running from backend/ as scri
     from api.live_routes import router as live_router
     from api.mcp_routes import router as mcp_router
     from api.cycle_routes import router as cycle_router
+    from api.project_repo_map_routes import router as repo_map_router
     from services.mcp.runtime import get_runtime as get_mcp_runtime
     from config.logging_config import setup_logging
     from config.settings import get_settings
@@ -108,6 +110,7 @@ app.include_router(conversation_router)
 app.include_router(live_router)
 app.include_router(mcp_router)
 app.include_router(cycle_router)
+app.include_router(repo_map_router)
 
 if __name__ == "__main__":
     import uvicorn

@@ -958,6 +958,29 @@ def _build_tool_catalog_prompt(catalog: list[dict]) -> str:
         if desc:
             line += f" — {desc[:200]}"
         lines.append(line)
+        schema = entry.get("inputSchema")
+        if isinstance(schema, dict) and schema:
+            # Show parameter names + types so the model picks the right keys.
+            props = schema.get("properties") if isinstance(schema, dict) else None
+            if isinstance(props, dict) and props:
+                summary_parts: list[str] = []
+                for pname, pschema in list(props.items())[:8]:
+                    if not isinstance(pschema, dict):
+                        continue
+                    ptype = pschema.get("type") or "any"
+                    summary_parts.append(f"{pname}:{ptype}")
+                required = schema.get("required")
+                req_set = (
+                    set(r for r in required if isinstance(r, str))
+                    if isinstance(required, list)
+                    else set()
+                )
+                if req_set:
+                    summary_parts.append(
+                        f"required={','.join(sorted(req_set))}"
+                    )
+                if summary_parts:
+                    lines.append(f"  args: {', '.join(summary_parts)}")
     return "\n".join(lines)
 
 

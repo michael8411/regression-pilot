@@ -14,17 +14,30 @@ import {
  * description, populated by the Tools tab as the user attaches tools.
  * Used by `useThreadController` to enrich the streamed tool catalog without
  * a per-turn round-trip to MCP.
+ *
+ * Phase 4: also caches `inputSchema` so the assistant prompt can teach the
+ * model the correct argument names/types up front.
  */
-const toolDescriptionCache = new Map<string, string>();
+interface CachedToolMeta {
+  description?: string;
+  inputSchema?: Record<string, unknown> | null;
+}
+
+const toolDescriptionCache = new Map<string, CachedToolMeta>();
 
 export function setToolDescription(
   connectionId: string,
   tool: string,
   description?: string,
+  inputSchema?: Record<string, unknown> | null,
 ): void {
-  if (description) {
-    toolDescriptionCache.set(`${connectionId}:${tool}`, description);
-  }
+  if (!description && !inputSchema) return;
+  const key = `${connectionId}:${tool}`;
+  const prev = toolDescriptionCache.get(key) ?? {};
+  toolDescriptionCache.set(key, {
+    description: description ?? prev.description,
+    inputSchema: inputSchema ?? prev.inputSchema,
+  });
 }
 
 export function useThreadController() {
@@ -44,12 +57,13 @@ export function useThreadController() {
       if (a.kind !== "mcp_tool") continue;
       const ref = decodeToolRef(a.ref);
       if (!ref) continue;
-      const description =
-        toolDescriptionCache.get(`${ref.connection_id}:${ref.tool}`) ?? undefined;
+      const cached =
+        toolDescriptionCache.get(`${ref.connection_id}:${ref.tool}`);
       out.push({
         connection_id: ref.connection_id,
         tool: ref.tool,
-        description,
+        description: cached?.description,
+        inputSchema: cached?.inputSchema ?? null,
       });
     }
     return out;

@@ -8,10 +8,18 @@ import structlog
 
 try:
     from backend.services.mcp.client import McpClient
+    from backend.services.mcp.http_client import McpHttpClient
+    from backend.services.mcp.sse_client import McpSseClient
     from backend.services import mcp_connection_service
 except ImportError:  # pragma: no cover
     from services.mcp.client import McpClient
+    from services.mcp.http_client import McpHttpClient
+    from services.mcp.sse_client import McpSseClient
     from services import mcp_connection_service
+
+
+# Union type — McpRuntime treats all three as the same surface.
+McpAnyClient = Any
 
 
 logger = structlog.get_logger("testdeck.mcp.runtime")
@@ -39,8 +47,8 @@ class _State:
         "last_error",
     )
 
-    def __init__(self, client: Optional[McpClient]):
-        self.client: Optional[McpClient] = client
+    def __init__(self, client: Optional[McpAnyClient]):
+        self.client: Optional[McpAnyClient] = client
         self.tools: list[dict] = []
         self.tools_fetched_at: float = 0.0
         self.last_used: float = time.monotonic()
@@ -158,7 +166,7 @@ class McpRuntime:
             return b""
         return await st.client.stderr_tail()
 
-    async def _ensure_client(self, connection_id: str) -> McpClient:
+    async def _ensure_client(self, connection_id: str) -> McpAnyClient:
         st = self._states.get(connection_id)
         if st and st.client is not None:
             return st.client
@@ -181,14 +189,29 @@ class McpRuntime:
                     f"mcp_connection_disabled:{connection_id}"
                 )
 
-            cwd = str(self._data_dir / connection_id)
-            client = McpClient(
-                connection_id=connection_id,
-                command=conn.command,
-                args=list(conn.args),
-                env=dict(conn.env),
-                cwd=cwd,
-            )
+            transport = getattr(conn, "transport", "stdio") or "stdio"
+            client: McpAnyClient
+            if transport == "http":
+                client = McpHttpClient(
+                    connection_id=connection_id,
+                    url=conn.url,
+                    env=dict(conn.env),
+                )
+            elif transport == "sse":
+                client = McpSseClient(
+                    connection_id=connection_id,
+                    url=conn.url,
+                    env=dict(conn.env),
+                )
+            else:
+                cwd = str(self._data_dir / connection_id)
+                client = McpClient(
+                    connection_id=connection_id,
+                    command=conn.command,
+                    args=list(conn.args),
+                    env=dict(conn.env),
+                    cwd=cwd,
+                )
             try:
                 await client.start()
             except Exception as e:

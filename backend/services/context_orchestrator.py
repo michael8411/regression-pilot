@@ -27,6 +27,7 @@ try:
         AdapterSet,
         build_context_bundle,
     )
+    from backend.services import observability_service as obs
     from backend.services.prompt_budget_service import BudgetPolicy, DEFAULT_POLICY
     from backend.services.project_repo_map_service import list_mappings
     from backend.services.provider_adapters import (
@@ -40,6 +41,7 @@ except ImportError:  # pragma: no cover
     from config.settings import get_settings
     from schemas.context_bundle_models import ContextBundle, RepoPlatform
     from services.context_bundle_service import AdapterSet, build_context_bundle
+    from services import observability_service as obs
     from services.prompt_budget_service import BudgetPolicy, DEFAULT_POLICY
     from services.project_repo_map_service import list_mappings
     from services.provider_adapters import (
@@ -112,6 +114,46 @@ async def build_for_ticket(
         adapters=adapters,
         platform_mapping=platform_mapping,
         policy=policy,
+    )
+
+    # Emit observability events for downstream telemetry. Routing decisions
+    # are summarized to (provider -> reasons) so log volume stays bounded.
+    ticket_key = str(ticket.get("key", ""))
+    project_key = ticket_key.split("-", 1)[0] if "-" in ticket_key else ""
+    reasons_map = {
+        d.provider: list(d.reasons) for d in bundle.tool_trace.routing_decisions
+    }
+    included = [
+        d.provider for d in bundle.tool_trace.routing_decisions if d.included
+    ]
+    platform_used = "github" if "github" in included else (
+        "ado" if "ado" in included else "none"
+    )
+    obs.context_route_selected(
+        ticket_key=ticket_key,
+        project_key=project_key,
+        providers_included=included,
+        reasons=reasons_map,
+        platform=platform_used,
+        include_full_files=False,  # full-file fetch is handled inside adapters
+    )
+    for provider, ms in bundle.tool_trace.latency_ms.items():
+        provider_errs = [
+            e for e in bundle.tool_trace.errors if e.provider == provider
+        ]
+        obs.provider_call_completed(
+            provider=provider,
+            ticket_key=ticket_key,
+            duration_ms=int(ms),
+            ok=len(provider_errs) == 0,
+            error_code=provider_errs[0].code if provider_errs else None,
+        )
+    obs.bundle_budget_applied(
+        ticket_key=ticket_key,
+        input_chars=bundle.budget.input_chars,
+        hard_cap_chars=bundle.budget.hard_cap_chars,
+        per_section_chars=dict(bundle.budget.per_section_chars),
+        truncated_sections=list(bundle.budget.truncated_sections),
     )
 
     if abort_on_atlassian_failure:

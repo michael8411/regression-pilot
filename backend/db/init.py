@@ -92,6 +92,7 @@ async def init_db() -> None:
         rows_migrated = await _migrate_plaintext_state_rows(db)
         await _migrate_attachments_kind_check(db)
         await _migrate_live_boards_profile_columns(db)
+        await _migrate_mcp_connections_transport(db)
 
     logger.info("db_initialized", rows_migrated=rows_migrated)
 
@@ -119,6 +120,30 @@ async def _migrate_live_boards_profile_columns(db) -> None:
     if changed:
         await db.commit()
         logger.info("live_boards_profile_columns_migrated")
+
+
+async def _migrate_mcp_connections_transport(db) -> None:
+    """Phase 4: add transport + url columns to mcp_connections.
+
+    Existing stdio rows are left intact (transport defaults to 'stdio',
+    url defaults to ''). Idempotent — checks PRAGMA before each ADD.
+    """
+    cursor = await db.execute("PRAGMA table_info(mcp_connections)")
+    cols = {row["name"] for row in await cursor.fetchall()}
+    changed = False
+    if "transport" not in cols:
+        await db.execute(
+            "ALTER TABLE mcp_connections ADD COLUMN transport TEXT NOT NULL DEFAULT 'stdio'"
+        )
+        changed = True
+    if "url" not in cols:
+        await db.execute(
+            "ALTER TABLE mcp_connections ADD COLUMN url TEXT NOT NULL DEFAULT ''"
+        )
+        changed = True
+    if changed:
+        await db.commit()
+        logger.info("mcp_connections_transport_migrated")
 
 
 async def _migrate_attachments_kind_check(db) -> None:

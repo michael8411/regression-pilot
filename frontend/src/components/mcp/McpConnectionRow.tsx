@@ -95,6 +95,9 @@ export function McpConnectionRow({
             <span className="truncate text-[13px] font-semibold text-ink">
               {connection.name}
             </span>
+            <Badge tone="neutral" size="sm">
+              {connection.transport.toUpperCase()}
+            </Badge>
             <Badge tone={tone} size="sm">
               {connection.status}
             </Badge>
@@ -105,7 +108,10 @@ export function McpConnectionRow({
             )}
           </div>
           <div className="mt-1 truncate font-mono text-[10.5px] text-ink-faint">
-            {connection.command} {connection.args.join(" ")}
+            {connection.transport === "stdio"
+              ? `${connection.command} ${connection.args.join(" ")}`.trim() ||
+                "(no command)"
+              : connection.url || "(no url)"}
           </div>
           <div className="mt-2 flex flex-wrap gap-1">
             {connection.envKeys.map((k) => (

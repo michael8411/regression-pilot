@@ -76,6 +76,19 @@ def _row_to_connection(
         row["auto_approve"], "mcp_auto_approve_decrypt_failed", row["id"]
     )
 
+    # Phase 4: transport/url were added later via migration; treat them as
+    # optional when reading legacy rows fetched from older schemas.
+    transport = "stdio"
+    url = ""
+    try:
+        transport = row["transport"] or "stdio"
+    except (IndexError, KeyError):
+        pass
+    try:
+        url = row["url"] or ""
+    except (IndexError, KeyError):
+        pass
+
     return McpConnection(
         id=row["id"],
         name=row["name"],
@@ -89,6 +102,8 @@ def _row_to_connection(
         lastError=runtime_error,
         createdAt=row["created_at"],
         updatedAt=row["updated_at"],
+        transport=transport,  # type: ignore[arg-type]
+        url=url,
     )
 
 
@@ -188,8 +203,9 @@ async def create_connection(payload: McpConnectionCreate) -> McpConnection:
             """
             INSERT INTO mcp_connections (
                 id, name, command, args, env,
-                enabled, auto_approve, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                enabled, auto_approve, created_at, updated_at,
+                transport, url
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 conn_id,
@@ -201,6 +217,8 @@ async def create_connection(payload: McpConnectionCreate) -> McpConnection:
                 auto_encrypted,
                 now,
                 now,
+                payload.transport,
+                payload.url,
             ),
         )
         await db.commit()
@@ -212,6 +230,7 @@ async def create_connection(payload: McpConnectionCreate) -> McpConnection:
         command_hash=hash(payload.command),
         env_key_count=len(payload.env),
         args_count=len(payload.args),
+        transport=payload.transport,
     )
     fetched = await get_connection_by_id(
         conn_id, runtime_status=_idle_status, runtime_errors=_no_error
@@ -265,6 +284,12 @@ async def patch_connection(
                 if patch.autoApprove
                 else ""
             )
+        if patch.transport is not None:
+            sets.append("transport = ?")
+            params.append(patch.transport)
+        if patch.url is not None:
+            sets.append("url = ?")
+            params.append(patch.url)
 
         if not sets:
             return await get_connection_by_id(

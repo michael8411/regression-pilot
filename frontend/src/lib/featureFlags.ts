@@ -10,7 +10,12 @@ export type FeatureFlag =
   | "testCycles"
   | "settingsV2"
   | "lightTheme"
-  | "liveTestingRedesignV1";
+  | "liveTestingRedesignV1"
+  | "mcpSmartRoutingV1"
+  | "mcpContextBundleV1"
+  | "mcpTransportHttpV1"
+  | "mcpTransportSseV1"
+  | "assistantPolicyRoutingV1";
 
 const DEFAULTS: Record<FeatureFlag, boolean> = {
   workspaceSwitcher: true,
@@ -24,33 +29,16 @@ const DEFAULTS: Record<FeatureFlag, boolean> = {
   testCycles: true,
   settingsV2: true,
   lightTheme: true, // keep the old light theme available while refactoring
-  // Live Testing redesign rollout — DEFAULT ON.
-  //
-  // Phase 08 re-run (post Phase 06b) cleared every Go/No-Go gate:
-  //   A) frontend build clean (1943 modules, 0 TS errors)
-  //   B–D) route smoke / builder / card analytics verified via code audit
-  //        against the locked visual contract (00b).
-  //   E) drawer + AI + publish: default Jira Test Cases field write (06c)
-  //      and legacy linked Zephyr publish both set
-  //      appears_on_jira_ticket: true; comment fallback returns false;
-  //      duplicate 409 gated by confirm_duplicate; partial publish
-  //      renders created + failed separately; PublishResultPanel never
-  //      claims "appears on ticket" without a confirmed Jira-side write.
-  //   F) targeted backend suites: 104 Phase-08 tests pass; full suite
-  //      500/500.
-  //   G) encrypted-at-rest assertions cover every sensitive column
-  //      including Phase 06b export_metadata for both targets.
-  //   H) CRUD round-trips proven for boards, profile, view_prefs,
-  //      pins, generated cases, publish (linked + comment), activity.
-  //   Hardening checklist: localStorage-free workflow store, Esc +
-  //   body-scroll handled in TicketDrawer / BoardBuilderDialog /
-  //   PublishCasesDialog (Esc blocked during publishing), polling
-  //   pauses during DnD + drawer open, activity logging failures
-  //   are swallowed so they never block Jira actions.
-  //
-  // To opt out locally: `window.__ff.disable("liveTestingRedesignV1")`
-  // or VITE_FF_LIVE_TESTING_REDESIGN_V1=false.
+  // Live Testing redesign rollout — DEFAULT ON (see Phase 08 sign-off).
   liveTestingRedesignV1: true,
+  // MCP refactor Phase 4 rollout flags. Smart routing + the routed bundle
+  // are on by default; HTTP transport is opt-in until QA signs off; SSE is
+  // off until the implementation lands.
+  mcpSmartRoutingV1: true,
+  mcpContextBundleV1: true,
+  mcpTransportHttpV1: true,
+  mcpTransportSseV1: false,
+  assistantPolicyRoutingV1: true,
 };
 
 /**

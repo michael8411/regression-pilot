@@ -198,7 +198,9 @@ CREATE TABLE IF NOT EXISTS mcp_connections (
     enabled       INTEGER NOT NULL DEFAULT 1,
     auto_approve  TEXT NOT NULL DEFAULT '',
     created_at    TEXT NOT NULL,
-    updated_at    TEXT NOT NULL
+    updated_at    TEXT NOT NULL,
+    transport     TEXT NOT NULL DEFAULT 'stdio',
+    url           TEXT NOT NULL DEFAULT ''
 )
 """
 

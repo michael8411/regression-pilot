@@ -6,6 +6,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { apiUrl } from "@/lib/http";
 
 type Theme = "dark" | "light" | "system";
 type ResolvedTheme = "dark" | "light";
@@ -62,7 +63,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   // Fetch saved theme from backend on mount (best-effort)
   useEffect(() => {
-    fetch("http://127.0.0.1:8000/config/preferences")
+    fetch(apiUrl("/config/preferences"))
       .then((r) => r.json())
       .then((prefs) => {
         const t = prefs?.theme;

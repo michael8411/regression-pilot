@@ -5,10 +5,9 @@ import type {
   McpTestResult,
   McpTool,
 } from "@/types/mcp";
+import { apiUrl } from "@/lib/http";
 
-const ROOT =
-  (import.meta.env.VITE_API_BASE as string | undefined) ?? "http://127.0.0.1:8000";
-const BASE = `${ROOT}/mcp/connections`;
+const BASE = apiUrl("/mcp/connections");
 
 async function safeDetail(res: Response): Promise<string> {
   try {

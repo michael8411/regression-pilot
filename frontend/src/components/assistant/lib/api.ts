@@ -10,20 +10,11 @@ import type {
   ToolCatalogEntry,
 } from "@/types/conversations";
 
-const BASE =
-  (import.meta.env.VITE_API_BASE as string | undefined) ?? "http://127.0.0.1:8000";
+import { API_BASE, http as jfetch } from "@/lib/http";
 
-async function jfetch<T>(input: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${input}`, {
-    headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
-    ...init,
-  });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(`${res.status} ${res.statusText}: ${detail.slice(0, 200)}`);
-  }
-  return res.json() as Promise<T>;
-}
+// `BASE` retained as a local alias so the streaming-helper call site below
+// (which uses `fetch` directly) keeps reading like the rest of the file.
+const BASE = API_BASE;
 
 export function listConversations(includeArchived = false): Promise<Conversation[]> {
   const q = includeArchived ? "?includeArchived=true" : "";

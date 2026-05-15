@@ -8,9 +8,10 @@
  *   - `deriveDefaultBoardName` produces a stable default board name from
  *     project + version inputs.
  *
- * Phase 02 wires these into the redesigned BoardCreateDialog. They are
- * also re-exported via `frontend/src/components/live/index.ts` so other
- * helpers (insights, hooks) can consume the same vocabulary.
+ * Phase 03 wires these into the redesigned `BoardBuilderDialog` (see
+ * `components/live/board-builder/`). They are also re-exported via
+ * `frontend/src/components/live/index.ts` so other helpers (insights,
+ * hooks) can consume the same vocabulary.
  */
 
 import type {

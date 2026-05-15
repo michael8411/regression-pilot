@@ -3,6 +3,18 @@ export { LiveHome } from "./LiveHome";
 export { BoardProvider, useBoard, type BoardContextValue } from "./BoardProvider";
 export { useLiveBoards } from "./hooks/useLiveBoards";
 
+// Phase 02 — Live home dashboard scaffolding.
+export {
+  LiveHomeHeader,
+  LiveStatsStrip,
+  LiveBoardFilters,
+  LiveBoardsGrid,
+  AddBoardTile,
+  LiveActivityRail,
+  type LiveBoardFilterChip,
+  type LiveActivityRailEntry,
+} from "./home";
+
 // Phase 01 — foundation contracts. Pure helpers and type-only exports;
 // no runtime UI is touched in this phase.
 export {

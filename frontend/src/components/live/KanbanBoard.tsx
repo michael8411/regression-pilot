@@ -20,6 +20,7 @@ import {
 } from "@dnd-kit/core";
 import { RefreshCw } from "@/lib/icons";
 import { useBoard } from "./BoardProvider";
+import { useOptionalLiveActivityFeed } from "./activity";
 import { resolveColumns } from "./lib/statusColumns";
 import { classifyStatus } from "./lib/statusTaxonomy";
 import { BoardToolbar } from "./BoardToolbar";
@@ -38,6 +39,7 @@ interface Props {
 
 export function KanbanBoard({ onOpenTicket }: Props) {
   const board = useBoard();
+  const activity = useOptionalLiveActivityFeed();
   const { goto } = useRoute();
   const [toast, setToast] = useState<string | null>(null);
 
@@ -87,6 +89,15 @@ export function KanbanBoard({ onOpenTicket }: Props) {
     const rollback = board.optimisticMove(ticketKey, fromStatus, toStatus);
     try {
       await board.transition(ticketKey, toStatus);
+      if (activity) {
+        void activity.record({
+          intent: "ticket_moved",
+          summary: `moved ${ticketKey}`,
+          detail: `${fromStatus} → ${toStatus}`,
+          board_id: board.board?.id ?? null,
+          ticket_key: ticketKey,
+        });
+      }
     } catch (e: any) {
       rollback();
       setToast(e?.message ?? "Could not move ticket");

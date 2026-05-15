@@ -3,9 +3,14 @@ import type {
   JiraCommentSubmitResponse,
   JiraTransition,
   JiraTransitionResult,
+  LiveActivityEvent,
+  LiveActivityKind,
   LiveBoard,
   LiveBoardProfile,
   LiveBoardViewPreferences,
+  LiveGeneratedCases,
+  LiveGeneratedCasesStatus,
+  LivePinnedTicket,
 } from "@/types/live";
 import type {
   GeneratedTestCases,
@@ -140,4 +145,148 @@ export function fetchTicketsByKeys(keys: string[]): Promise<JiraTicket[]> {
     method: "POST",
     body: JSON.stringify({ keys }),
   });
+}
+
+// ===========================================================================
+// Phase 06 — encrypted SQLite-backed Live workflow artifacts.
+// All three resource families share the /live/* prefix.
+// ===========================================================================
+
+// --- Pinned tickets --------------------------------------------------------
+
+export function listLivePins(): Promise<LivePinnedTicket[]> {
+  return jfetch("/live/pins");
+}
+
+export interface PutLivePinBody {
+  board_id?: string | null;
+  ticket_snapshot?: Record<string, unknown> | null;
+}
+
+export function putLivePin(
+  ticketKey: string,
+  body: PutLivePinBody = {},
+): Promise<LivePinnedTicket> {
+  return jfetch(`/live/pins/${encodeURIComponent(ticketKey)}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      board_id: body.board_id ?? null,
+      ticket_snapshot: body.ticket_snapshot ?? null,
+    }),
+  });
+}
+
+export function deleteLivePin(
+  ticketKey: string,
+): Promise<{ deleted: boolean }> {
+  return jfetch(`/live/pins/${encodeURIComponent(ticketKey)}`, {
+    method: "DELETE",
+  });
+}
+
+// --- Generated cases -------------------------------------------------------
+
+export function listLiveGeneratedCases(
+  params: { ticketKey?: string } = {},
+): Promise<LiveGeneratedCases[]> {
+  const qs = params.ticketKey
+    ? `?ticket_key=${encodeURIComponent(params.ticketKey)}`
+    : "";
+  return jfetch(`/live/generated-cases${qs}`);
+}
+
+export interface CreateLiveGeneratedCasesBody {
+  ticket_key: string;
+  board_id?: string | null;
+  instructions?: string;
+  cases?: unknown[];
+  context_metadata?: Record<string, unknown> | null;
+  export_metadata?: Record<string, unknown> | null;
+  status?: LiveGeneratedCasesStatus;
+}
+
+export function createLiveGeneratedCases(
+  body: CreateLiveGeneratedCasesBody,
+): Promise<LiveGeneratedCases> {
+  return jfetch("/live/generated-cases", {
+    method: "POST",
+    body: JSON.stringify({
+      ticket_key: body.ticket_key,
+      board_id: body.board_id ?? null,
+      instructions: body.instructions ?? "",
+      cases: body.cases ?? [],
+      context_metadata: body.context_metadata ?? null,
+      export_metadata: body.export_metadata ?? null,
+      status: body.status ?? "draft",
+    }),
+  });
+}
+
+export interface PatchLiveGeneratedCasesBody {
+  instructions?: string;
+  cases?: unknown[];
+  context_metadata?: Record<string, unknown> | null;
+  export_metadata?: Record<string, unknown> | null;
+  status?: LiveGeneratedCasesStatus;
+  exported_at?: string;
+}
+
+export function patchLiveGeneratedCases(
+  id: string,
+  patch: PatchLiveGeneratedCasesBody,
+): Promise<LiveGeneratedCases> {
+  return jfetch(`/live/generated-cases/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+}
+
+export function deleteLiveGeneratedCases(
+  id: string,
+): Promise<{ deleted: boolean }> {
+  return jfetch(`/live/generated-cases/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
+// --- Activity feed ---------------------------------------------------------
+
+export function listLiveActivity(
+  params: { boardId?: string; limit?: number } = {},
+): Promise<LiveActivityEvent[]> {
+  const qs = new URLSearchParams();
+  if (params.boardId) qs.set("board_id", params.boardId);
+  if (typeof params.limit === "number") qs.set("limit", String(params.limit));
+  const tail = qs.toString();
+  return jfetch(`/live/activity${tail ? `?${tail}` : ""}`);
+}
+
+export interface CreateLiveActivityBody {
+  kind: LiveActivityKind;
+  summary: string;
+  detail?: string;
+  board_id?: string | null;
+  ticket_key?: string | null;
+}
+
+export function createLiveActivity(
+  body: CreateLiveActivityBody,
+): Promise<LiveActivityEvent> {
+  return jfetch("/live/activity", {
+    method: "POST",
+    body: JSON.stringify({
+      kind: body.kind,
+      summary: body.summary,
+      detail: body.detail ?? "",
+      board_id: body.board_id ?? null,
+      ticket_key: body.ticket_key ?? null,
+    }),
+  });
+}
+
+export function clearLiveActivity(
+  params: { boardId?: string } = {},
+): Promise<{ deleted: number }> {
+  const qs = params.boardId ? `?board_id=${encodeURIComponent(params.boardId)}` : "";
+  return jfetch(`/live/activity${qs}`, { method: "DELETE" });
 }

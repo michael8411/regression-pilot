@@ -12,11 +12,15 @@
 import {
   forwardRef,
   useCallback,
+  useEffect,
   useImperativeHandle,
+  useRef,
   useState,
 } from "react";
 import { Loader2 } from "@/lib/icons";
 import { useLiveGenerate } from "../hooks/useLiveGenerate";
+import { useLiveGeneratedCases } from "../hooks/useLiveGeneratedCases";
+import { useOptionalLiveActivityFeed } from "../activity";
 import {
   composeInstructions,
   DEFAULT_GENERATE_OPTIONS,
@@ -27,7 +31,7 @@ import {
   type LiveGenerateOptions,
 } from "../LiveGeneratePanel";
 import { GenerationSkeletonList } from "@/components/live/visual";
-import type { JiraTicket } from "@/types";
+import type { GeneratedTestCases, JiraTicket } from "@/types";
 
 export interface DrawerAiPanelHandle {
   /** Triggered by the sticky footer CTA from any tab. */
@@ -36,15 +40,47 @@ export interface DrawerAiPanelHandle {
 
 interface Props {
   ticket: JiraTicket;
+  /**
+   * Optional callback invoked after a successful generation has been
+   * persisted. The TicketDrawer uses this to refresh the Test Cases tab.
+   */
+  onPersisted?: () => void;
 }
 
 export const DrawerAiPanel = forwardRef<DrawerAiPanelHandle, Props>(
-  function DrawerAiPanel({ ticket }, ref) {
+  function DrawerAiPanel({ ticket, onPersisted }, ref) {
     const [prompt, setPrompt] = useState("");
     const [options, setOptions] = useState<LiveGenerateOptions>(
       DEFAULT_GENERATE_OPTIONS,
     );
     const { generate, generating, result, error } = useLiveGenerate();
+    const { save: persistCases } = useLiveGeneratedCases(ticket.key);
+    const activity = useOptionalLiveActivityFeed();
+
+    // Persist + emit activity exactly once per successful generation.
+    const persistedResultRef = useRef<GeneratedTestCases | null>(null);
+    useEffect(() => {
+      if (!result || persistedResultRef.current === result) return;
+      persistedResultRef.current = result;
+      const cases = result.test_cases ?? [];
+      void persistCases({
+        ticketKey: ticket.key,
+        instructions: composeInstructions(prompt, options),
+        cases,
+        status: "draft",
+      }).then((saved) => {
+        if (saved && onPersisted) onPersisted();
+      });
+      if (activity) {
+        void activity.record({
+          intent: "cases_generated",
+          summary: `generated ${ticket.key}`,
+          detail: `${cases.length} test cases`,
+          ticket_key: ticket.key,
+        });
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [result]);
 
     const handleGenerate = useCallback(() => {
       void generate(ticket, composeInstructions(prompt, options));

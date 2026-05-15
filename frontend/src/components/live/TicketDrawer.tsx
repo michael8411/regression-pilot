@@ -23,7 +23,9 @@ import { createPortal } from "react-dom";
 import { clsx } from "clsx";
 import { Sparkles } from "@/lib/icons";
 import { useTicketDetail } from "./hooks/useTicketDetail";
-import { usePinnedKeys } from "./hooks/usePinnedKeys";
+import { useLiveGeneratedCases } from "./hooks/useLiveGeneratedCases";
+import { useLivePins } from "./hooks/useLivePins";
+import { useOptionalLiveActivityFeed } from "./activity";
 import { DrawerHeader } from "./DrawerHeader";
 import { DrawerSummary } from "./DrawerSummary";
 import { DrawerDescription } from "./DrawerDescription";
@@ -48,7 +50,9 @@ type TabId = "description" | "comments" | "attachments" | "cases" | "ai";
 export function TicketDrawer({ ticketKey, onClose }: Props) {
   const { ticket, loading, error, refresh, addLocalComment } =
     useTicketDetail(ticketKey);
-  const { isPinned, toggle } = usePinnedKeys();
+  const generatedCases = useLiveGeneratedCases(ticketKey);
+  const { isPinned, toggle: togglePin } = useLivePins();
+  const activity = useOptionalLiveActivityFeed();
   const drawerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
   const aiPanelRef = useRef<DrawerAiPanelHandle | null>(null);
@@ -85,12 +89,13 @@ export function TicketDrawer({ ticketKey, onClose }: Props) {
   const goToAiTab = useCallback(() => setActiveTab("ai"), []);
 
   const commentCount = ticket?.comments?.length ?? 0;
+  const draftCount = generatedCases.drafts.length;
 
   const tabs: DrawerTabItem[] = [
     { id: "description", label: "Description" },
     { id: "comments", label: "Comments", count: commentCount },
     { id: "attachments", label: "Attachments", count: 0 },
-    { id: "cases", label: "Test Cases", count: 0 },
+    { id: "cases", label: "Test Cases", count: draftCount },
     { id: "ai", label: "AI", variant: "ai" },
   ];
 
@@ -118,7 +123,35 @@ export function TicketDrawer({ ticketKey, onClose }: Props) {
           ticketKey={ticketKey}
           ticket={ticket}
           isPinned={isPinned(ticketKey)}
-          onTogglePin={() => toggle(ticketKey)}
+          onTogglePin={() => {
+            const snapshot = ticket
+              ? ({
+                  key: ticket.key,
+                  id: ticket.id,
+                  summary: ticket.summary,
+                  status: ticket.status,
+                  issue_type: ticket.issue_type,
+                  priority: ticket.priority,
+                  assignee: ticket.assignee,
+                  reporter: ticket.reporter,
+                  labels: ticket.labels,
+                  components: ticket.components,
+                  fix_versions: ticket.fix_versions,
+                  resolution: ticket.resolution,
+                  created: ticket.created,
+                  updated: ticket.updated,
+                } as Record<string, unknown>)
+              : null;
+            void togglePin(ticketKey, { snapshot }).then((nowPinned) => {
+              if (activity) {
+                void activity.record({
+                  intent: nowPinned ? "ticket_pinned" : "ticket_unpinned",
+                  summary: `${nowPinned ? "pinned" : "unpinned"} ${ticketKey}`,
+                  ticket_key: ticketKey,
+                });
+              }
+            });
+          }}
           onClose={onClose}
         />
 
@@ -166,10 +199,19 @@ export function TicketDrawer({ ticketKey, onClose }: Props) {
 
               {activeTab === "attachments" && <DrawerAttachmentsPanel />}
 
-              {activeTab === "cases" && <DrawerCasesPanel onGoToAi={goToAiTab} />}
+              {activeTab === "cases" && (
+                <DrawerCasesPanel
+                  ticketKey={ticketKey}
+                  onGoToAi={goToAiTab}
+                />
+              )}
 
               {activeTab === "ai" && (
-                <DrawerAiPanel ref={aiPanelRef} ticket={ticket} />
+                <DrawerAiPanel
+                  ref={aiPanelRef}
+                  ticket={ticket}
+                  onPersisted={() => void generatedCases.refresh()}
+                />
               )}
             </>
           )}

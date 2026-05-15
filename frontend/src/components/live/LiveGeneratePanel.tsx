@@ -13,10 +13,12 @@
  * on the visual contract without coupling to context-bundle internals.
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2, X, Sparkles } from "@/lib/icons";
 import { clsx } from "clsx";
 import { useLiveGenerate } from "./hooks/useLiveGenerate";
+import { useLiveGeneratedCases } from "./hooks/useLiveGeneratedCases";
+import { useOptionalLiveActivityFeed } from "./activity";
 import { GeneratedTestCaseCard } from "./GeneratedTestCaseCard";
 import type { GeneratedTestCases, JiraTicket } from "@/types";
 
@@ -233,6 +235,31 @@ export function LiveGeneratePanel({ ticket, onClose }: Props) {
     DEFAULT_GENERATE_OPTIONS,
   );
   const { generate, generating, result, error, reset } = useLiveGenerate();
+  const { save: persistCases } = useLiveGeneratedCases(ticket.key);
+  const activity = useOptionalLiveActivityFeed();
+
+  // Persist + emit activity exactly once per successful generation.
+  const persistedResultRef = useRef<GeneratedTestCases | null>(null);
+  useEffect(() => {
+    if (!result || persistedResultRef.current === result) return;
+    persistedResultRef.current = result;
+    const cases = result.test_cases ?? [];
+    void persistCases({
+      ticketKey: ticket.key,
+      instructions: composeInstructions(prompt, options),
+      cases,
+      status: "draft",
+    });
+    if (activity) {
+      void activity.record({
+        intent: "cases_generated",
+        summary: `generated ${ticket.key}`,
+        detail: `${cases.length} test cases`,
+        ticket_key: ticket.key,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result]);
 
   const copyJson = async () => {
     if (!result) return;

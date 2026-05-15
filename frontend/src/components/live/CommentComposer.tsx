@@ -1,6 +1,7 @@
 import { useEffect, useState, type KeyboardEvent } from "react";
 import { Loader2, Send, ShieldAlert, X } from "@/lib/icons";
 import { usePostComment } from "./hooks/usePostComment";
+import { useOptionalLiveActivityFeed } from "./activity";
 
 interface Props {
   ticketKey: string;
@@ -9,6 +10,7 @@ interface Props {
 
 export function CommentComposer({ ticketKey, onPosted }: Props) {
   const { posting, warnings, error, clearWarnings, post } = usePostComment();
+  const activity = useOptionalLiveActivityFeed();
   const [body, setBody] = useState("");
   const [showWarn, setShowWarn] = useState(false);
 
@@ -30,6 +32,16 @@ export function CommentComposer({ ticketKey, onPosted }: Props) {
         created: res.comment.created,
         body: text,
       });
+      if (activity) {
+        const truncated =
+          text.length > 80 ? `${text.slice(0, 77)}…` : text;
+        void activity.record({
+          intent: "comment_posted",
+          summary: `commented on ${ticketKey}`,
+          detail: `"${truncated}"`,
+          ticket_key: ticketKey,
+        });
+      }
       setBody("");
     }
   };

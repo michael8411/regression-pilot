@@ -1,45 +1,44 @@
-import { Loader2, RefreshCw } from "@/lib/icons";
-import { useBoard } from "./BoardProvider";
+/**
+ * Phase 05 — board toolbar.
+ *
+ * Thin adapter that pulls board context state and delegates rendering to
+ * <BoardViewHeader>. Kept as a named export so existing imports continue
+ * to compile.
+ */
 
-export function BoardToolbar() {
+import { useBoard } from "./BoardProvider";
+import {
+  BoardViewHeader,
+  type ColumnModeKey,
+  type DensityKey,
+} from "./board";
+
+interface Props {
+  columnMode: ColumnModeKey;
+  onColumnModeChange: (next: ColumnModeKey) => void;
+  density: DensityKey;
+  onDensityChange: (next: DensityKey) => void;
+}
+
+export function BoardToolbar({
+  columnMode,
+  onColumnModeChange,
+  density,
+  onDensityChange,
+}: Props) {
   const { board, fetchedAt, loading, refresh } = useBoard();
   if (!board) return null;
 
   return (
-    <div className="flex items-center justify-between px-4 py-2.5 border-b border-subtle">
-      <div className="min-w-0">
-        <h2 className="text-[13px] font-semibold text-ink truncate">
-          {board.name}
-        </h2>
-        <code className="block text-[10.5px] text-ink-faint truncate font-mono">
-          {board.jql}
-        </code>
-      </div>
-      <div className="flex items-center gap-2">
-        <span className="text-[10.5px] text-ink-faint">
-          {fetchedAt ? `Updated ${formatTime(fetchedAt)}` : "—"}
-        </span>
-        <button
-          type="button"
-          onClick={() => void refresh()}
-          aria-label="Refresh"
-          title="Refresh"
-          disabled={loading}
-          className="g-btn text-[12px] px-2 py-1 flex items-center gap-1.5 disabled:opacity-50"
-        >
-          {loading ? (
-            <Loader2 size={11} className="animate-spin" />
-          ) : (
-            <RefreshCw size={11} />
-          )}
-          Refresh
-        </button>
-      </div>
-    </div>
+    <BoardViewHeader
+      board={board}
+      fetchedAt={fetchedAt}
+      refreshing={loading}
+      onRefresh={() => void refresh()}
+      columnMode={columnMode}
+      onColumnModeChange={onColumnModeChange}
+      density={density}
+      onDensityChange={onDensityChange}
+    />
   );
-}
-
-function formatTime(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }

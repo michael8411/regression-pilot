@@ -1,3 +1,14 @@
+/**
+ * Phase 05 — kanban board with column-mode + density controls.
+ *
+ * - `columnMode`: "all" (default) shows every column with non-QA ones dimmed
+ *                  to 60% opacity. "qa" hides non-QA columns entirely.
+ * - `density`: "compact" | "cozy" | "roomy" — passed down to TicketCard.
+ *
+ * State is local to the session. Phase 06 may persist these via
+ * board.view_prefs.
+ */
+
 import { useEffect, useMemo, useState } from "react";
 import {
   DndContext,
@@ -10,8 +21,10 @@ import {
 import { RefreshCw } from "@/lib/icons";
 import { useBoard } from "./BoardProvider";
 import { resolveColumns } from "./lib/statusColumns";
+import { classifyStatus } from "./lib/statusTaxonomy";
 import { BoardToolbar } from "./BoardToolbar";
 import { BoardColumn } from "./BoardColumn";
+import type { ColumnModeKey, DensityKey } from "./board";
 import { useRoute } from "@/contexts/RouteContext";
 import {
   useRegisterCommand,
@@ -27,6 +40,16 @@ export function KanbanBoard({ onOpenTicket }: Props) {
   const board = useBoard();
   const { goto } = useRoute();
   const [toast, setToast] = useState<string | null>(null);
+
+  // Phase 05 — local view controls.
+  const initialDensity =
+    (board.board?.view_prefs?.density as DensityKey | undefined) ?? "cozy";
+  const initialColumnMode =
+    (board.board?.view_prefs?.boardColumnMode as ColumnModeKey | undefined) ??
+    "all";
+  const [density, setDensity] = useState<DensityKey>(initialDensity);
+  const [columnMode, setColumnMode] = useState<ColumnModeKey>(initialColumnMode);
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
   );
@@ -102,11 +125,22 @@ export function KanbanBoard({ onOpenTicket }: Props) {
   }
   if (!board.board) return null;
 
-  const columns = resolveColumns(board.board.columns, board.byStatus);
+  const resolvedColumns = resolveColumns(board.board.columns, board.byStatus);
+
+  // QA-only: include only columns whose bucket is ready/testing/done.
+  const visibleColumns =
+    columnMode === "qa"
+      ? resolvedColumns.filter((s) => classifyStatus(s) !== "other")
+      : resolvedColumns;
 
   return (
     <div className="flex flex-col h-full">
-      <BoardToolbar />
+      <BoardToolbar
+        columnMode={columnMode}
+        onColumnModeChange={setColumnMode}
+        density={density}
+        onDensityChange={setDensity}
+      />
       <div className="flex-1 overflow-x-auto">
         <DndContext
           sensors={sensors}
@@ -115,14 +149,20 @@ export function KanbanBoard({ onOpenTicket }: Props) {
           onDragCancel={() => board.resumePolling()}
         >
           <div className="flex gap-3 p-3 h-full">
-            {columns.map((status) => (
-              <BoardColumn
-                key={status}
-                status={status}
-                tickets={board.byStatus[status] ?? []}
-                onOpen={onOpenTicket ?? (() => {})}
-              />
-            ))}
+            {visibleColumns.map((status) => {
+              const dim =
+                columnMode === "all" && classifyStatus(status) === "other";
+              return (
+                <BoardColumn
+                  key={status}
+                  status={status}
+                  tickets={board.byStatus[status] ?? []}
+                  onOpen={onOpenTicket ?? (() => {})}
+                  density={density}
+                  dim={dim}
+                />
+              );
+            })}
           </div>
         </DndContext>
       </div>

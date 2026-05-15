@@ -1,10 +1,18 @@
+/**
+ * Phase 05 — drawer ticket metadata grid.
+ *
+ * Embedded inside the Description tab now (not at the drawer root) so the
+ * tab IA stays clean. Labels still render as <LabelChip> for consistency
+ * with the rest of the Live surfaces.
+ */
+
 import type { ReactNode } from "react";
-import { Tag } from "@/lib/icons";
+import { LabelChip } from "@/components/live/visual";
 import type { JiraTicket } from "@/types";
 
 export function DrawerSummary({ ticket }: { ticket: JiraTicket }) {
   return (
-    <section className="px-4 py-3 border-b border-subtle text-[11.5px] text-ink-secondary">
+    <section className="text-[11.5px] text-ink-secondary">
       <dl className="grid grid-cols-[80px_1fr] gap-y-1.5">
         <Row term="Assignee">{ticket.assignee || "Unassigned"}</Row>
         <Row term="Reporter">{ticket.reporter || "Unknown"}</Row>
@@ -21,12 +29,7 @@ export function DrawerSummary({ ticket }: { ticket: JiraTicket }) {
           <Row term="Labels">
             <div className="flex flex-wrap gap-1">
               {ticket.labels.map((l) => (
-                <span
-                  key={l}
-                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10.5px] bg-surface-overlay text-ink-muted"
-                >
-                  <Tag size={9} /> {l}
-                </span>
+                <LabelChip key={l} label={l} />
               ))}
             </div>
           </Row>

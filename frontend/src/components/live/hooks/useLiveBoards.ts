@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import * as api from "@/components/live/lib/api";
+import { useOptionalLiveActivityFeed } from "@/components/live/activity";
 import type {
   LiveBoard,
   LiveBoardProfile,
@@ -29,6 +30,7 @@ export function useLiveBoards(): UseLiveBoardsResult {
   const [boards, setBoards] = useState<LiveBoard[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const activity = useOptionalLiveActivityFeed();
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -60,9 +62,17 @@ export function useLiveBoards(): UseLiveBoardsResult {
     async (body: api.CreateLiveBoardBody) => {
       const created = await api.createLiveBoard(body);
       setBoards((prev) => [created, ...prev]);
+      if (activity) {
+        void activity.record({
+          intent: "board_created",
+          summary: `created board ${created.name}`,
+          detail: created.jql,
+          board_id: created.id,
+        });
+      }
       return created;
     },
-    [],
+    [activity],
   );
 
   const rename = useCallback(
@@ -156,12 +166,19 @@ export function useLiveBoards(): UseLiveBoardsResult {
             return c.updated_at.localeCompare(a.updated_at);
           }),
         );
+        if (activity) {
+          void activity.record({
+            intent: next ? "board_pinned" : "board_unpinned",
+            summary: `${next ? "pinned" : "unpinned"} board ${b.name}`,
+            board_id: b.id,
+          });
+        }
       } catch (e) {
         updateLocal(id, { pinned: b.pinned });
         throw e;
       }
     },
-    [boards, updateLocal],
+    [boards, updateLocal, activity],
   );
 
   const remove = useCallback(

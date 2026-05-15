@@ -1,19 +1,41 @@
+/**
+ * Phase 06 — durable Live activity rail.
+ *
+ * Reads events from `LiveActivityProvider` (encrypted SQLite). Renders the
+ * locked visual contract (00b):
+ *   - container: --surface-elevated + --border-subtle + radius-xl
+ *   - header: pulsing accent dot + "Live activity" + "View history" CTA
+ *   - row: <InitialAvatar> (ai variant for AI Assistant)
+ *          + actor in --ink + verb in --ink-secondary + inline <TicketKeyChip>
+ *          + detail line in --ink-muted
+ *          + mono timestamp
+ *
+ * Per-event-kind rendering rules:
+ *   - ticket_moved:  detail line "<from> → <to>" using statusColor tones.
+ *   - cases_generated: AI avatar mandatory when actor === "AI Assistant".
+ *   - comment_posted: detail truncated to 80 chars in quotes (already done at write time).
+ *
+ * The legacy `entries` prop is accepted for backwards-compatibility with
+ * any caller that hasn't migrated yet (currently `LiveHome`), but events
+ * sourced from the durable feed always take precedence when available.
+ */
+
+import { useMemo } from "react";
 import { Activity, History } from "@/lib/icons";
 import { useCommandRegistry } from "@/contexts/CommandRegistryContext";
-
-/**
- * Phase 02 — sticky activity rail.
- * Phase 04 patch — elevated surface + pulsing accent dot per visual contract.
- *
- * Render a production-safe placeholder strategy: in-memory recent events
- * are surfaced when callers pass them, otherwise we show an empty-state
- * copy (no fabricated events). Phase 06 wires the durable
- * `live_activity` feed; the contract is locked in Phase 01.
- *
- * Local-only state is intentionally read from props, NOT from
- * `localStorage` — durable Live workflow state must use encrypted SQLite
- * per the master roadmap.
- */
+import {
+  useOptionalLiveActivityFeed,
+  resolveIntent,
+  INTENT_VERBS,
+  type ActivityIntent,
+} from "@/components/live/activity";
+import { classifyStatus } from "@/components/live/lib/statusTaxonomy";
+import { statusColor } from "@/components/live/lib/statusColors";
+import {
+  InitialAvatar,
+  TicketKeyChip,
+} from "@/components/live/visual";
+import type { LiveActivityEvent } from "@/types/live";
 
 export interface LiveActivityRailEntry {
   id: string;
@@ -27,16 +49,19 @@ export interface LiveActivityRailEntry {
 
 interface Props {
   /**
-   * In-memory recent activity. May be empty; never inject fake events.
-   * Phase 06 will replace this with the durable artifact feed.
+   * Legacy in-memory entries from `LiveHome`. Ignored once the durable feed
+   * is active; kept here for backward compatibility with the Phase 02 prop
+   * shape so existing call sites don't break.
    */
-  entries: LiveActivityRailEntry[];
+  entries?: LiveActivityRailEntry[];
 }
 
 const HISTORY_COMMAND_ID = "jump.history";
+const DEFAULT_ACTOR = "You";
 
 export function LiveActivityRail({ entries }: Props) {
   const { commands } = useCommandRegistry();
+  const feed = useOptionalLiveActivityFeed();
 
   const openHistory = () => {
     const cmd = commands.find((c) => c.id === HISTORY_COMMAND_ID);
@@ -45,6 +70,10 @@ export function LiveActivityRail({ entries }: Props) {
       void cmd.action.run();
     }
   };
+
+  // Prefer the durable feed when available; fall back to legacy entries.
+  const persistedEvents = feed?.events ?? [];
+  const usePersisted = !!feed;
 
   return (
     <aside
@@ -65,12 +94,12 @@ export function LiveActivityRail({ entries }: Props) {
             />
           </span>
           <Activity size={12} className="text-accent-text" />
-          <h2 className="text-[12px] font-semibold">Activity</h2>
+          <h2 className="text-[12px] font-semibold">Live activity</h2>
         </div>
         <button
           type="button"
           onClick={openHistory}
-          className="text-[10.5px] text-ink-muted hover:text-ink underline-offset-2 hover:underline flex items-center gap-1"
+          className="text-[10.5px] text-ink-secondary hover:text-accent-text underline-offset-2 hover:underline flex items-center gap-1 transition-colors"
         >
           <History size={11} />
           View history
@@ -78,32 +107,204 @@ export function LiveActivityRail({ entries }: Props) {
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {entries.length === 0 ? (
-          <EmptyRail />
+        {usePersisted ? (
+          <PersistedList events={persistedEvents} loading={!!feed?.loading} />
         ) : (
-          <ul className="flex flex-col">
-            {entries.map((e) => (
-              <li
-                key={e.id}
-                className="px-4 py-3 border-b border-subtle/60 last:border-b-0"
-              >
-                <div className="text-[12px] text-ink leading-snug truncate">
-                  {e.summary}
-                </div>
-                {e.detail && (
-                  <div className="mt-0.5 text-[10.5px] text-ink-muted truncate">
-                    {e.detail}
-                  </div>
-                )}
-                <div className="mt-1 text-[10px] text-ink-faint font-mono">
-                  {relativeTime(e.at)}
-                </div>
-              </li>
-            ))}
-          </ul>
+          <LegacyList entries={entries ?? []} />
         )}
       </div>
     </aside>
+  );
+}
+
+// ===========================================================================
+// Persisted feed
+// ===========================================================================
+
+function PersistedList({
+  events,
+  loading,
+}: {
+  events: LiveActivityEvent[];
+  loading: boolean;
+}) {
+  if (loading && events.length === 0) {
+    return (
+      <div className="px-4 py-6 text-[11px] text-ink-faint">Loading activity…</div>
+    );
+  }
+  if (events.length === 0) {
+    return <EmptyRail />;
+  }
+  return (
+    <ul className="flex flex-col p-2 gap-0.5">
+      {events.map((e) => (
+        <ActivityRow key={e.id} event={e} />
+      ))}
+    </ul>
+  );
+}
+
+function ActivityRow({ event }: { event: LiveActivityEvent }) {
+  const intent = resolveIntent({
+    kind: event.kind,
+    summary: event.summary,
+    detail: event.detail,
+    ticket_key: event.ticket_key,
+    board_id: event.board_id,
+  });
+
+  const { actor, subject } = parseSummary(event.summary);
+  const verb = INTENT_VERBS[intent] ?? "touched";
+  const ticketKey = event.ticket_key || (subject && /^[A-Z][A-Z0-9]+-\d+$/.test(subject) ? subject : "");
+  const priorityHint = extractPriorityHint(event.detail);
+  const isAi = actor.toLowerCase().includes("ai assistant");
+
+  return (
+    <li
+      className="flex gap-2 px-2 py-2 transition-colors hover:bg-surface-overlay/50"
+      style={{ borderRadius: "var(--radius-md, 6px)" }}
+    >
+      <InitialAvatar
+        name={actor || DEFAULT_ACTOR}
+        special={isAi ? "ai" : undefined}
+        size={22}
+        className="mt-0.5"
+      />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-start flex-wrap gap-x-1 gap-y-0.5 text-[11.5px] leading-snug">
+          <span className="text-ink font-medium">{actor || DEFAULT_ACTOR}</span>
+          <span className="text-ink-secondary">{verb}</span>
+          {ticketKey ? (
+            <TicketKeyChip ticketKey={ticketKey} priority={priorityHint} />
+          ) : subject ? (
+            <span className="text-ink-secondary truncate max-w-[140px]">
+              {subject}
+            </span>
+          ) : null}
+        </div>
+        <DetailLine intent={intent} detail={event.detail} />
+      </div>
+      <span
+        className="text-[10px] text-ink-muted font-mono shrink-0 pt-0.5"
+        title={event.created_at}
+      >
+        {relativeTime(event.created_at)}
+      </span>
+    </li>
+  );
+}
+
+function DetailLine({
+  intent,
+  detail,
+}: {
+  intent: ActivityIntent;
+  detail: string;
+}) {
+  if (!detail) return null;
+
+  // ticket_moved → status-colored from → to.
+  if (intent === "ticket_moved") {
+    const m = /^(.+?)\s*(?:→|->)\s*(.+)$/.exec(detail);
+    if (m) {
+      const fromBucket = classifyStatus(m[1].trim());
+      const toBucket = classifyStatus(m[2].trim());
+      return (
+        <div className="mt-0.5 text-[10.5px] text-ink-muted truncate">
+          <span className={statusColor(fromBucket).fg}>{m[1].trim()}</span>
+          <span className="mx-1">→</span>
+          <span className={statusColor(toBucket).fg}>{m[2].trim()}</span>
+        </div>
+      );
+    }
+  }
+
+  return (
+    <div className="mt-0.5 text-[10.5px] text-ink-muted truncate">{detail}</div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Activity summaries are written in the form "<verb> <subject>" (e.g.
+ * "pinned FM-1418"). The actor is not embedded in the persisted summary
+ * because the database doesn't have user identity yet — we synthesize
+ * "You" as the actor for all events emitted by the current session.
+ *
+ * AI-attributed events use "AI Assistant" as actor when the originating
+ * caller writes that verbatim in the summary string ("AI Assistant
+ * generated …"). We detect that here.
+ */
+function parseSummary(raw: string): { actor: string; subject: string } {
+  const trimmed = (raw || "").trim();
+  if (!trimmed) return { actor: DEFAULT_ACTOR, subject: "" };
+
+  // "AI Assistant generated FM-1418" pattern
+  const aiMatch = /^AI Assistant\s+(.+)$/.exec(trimmed);
+  if (aiMatch) {
+    const tail = aiMatch[1];
+    const parts = tail.split(/\s+/);
+    if (parts.length >= 2) {
+      return { actor: "AI Assistant", subject: parts.slice(1).join(" ") };
+    }
+    return { actor: "AI Assistant", subject: tail };
+  }
+
+  // Default: actor = "You", subject = trailing token after the verb.
+  const parts = trimmed.split(/\s+/);
+  if (parts.length === 1) return { actor: DEFAULT_ACTOR, subject: trimmed };
+  return { actor: DEFAULT_ACTOR, subject: parts.slice(1).join(" ") };
+}
+
+function extractPriorityHint(detail: string): string | undefined {
+  if (!detail) return undefined;
+  const m = /priority[:=]\s*(critical|high|medium|low)/i.exec(detail);
+  return m ? m[1].toLowerCase() : undefined;
+}
+
+// ===========================================================================
+// Legacy fallback (kept for non-provider callers; never used inside the
+// LiveWorkspace shell, which always wraps in LiveActivityProvider)
+// ===========================================================================
+
+function LegacyList({ entries }: { entries: LiveActivityRailEntry[] }) {
+  // Deduplicate ids defensively.
+  const safe = useMemo(() => {
+    const seen = new Set<string>();
+    return entries.filter((e) => {
+      if (seen.has(e.id)) return false;
+      seen.add(e.id);
+      return true;
+    });
+  }, [entries]);
+
+  if (safe.length === 0) return <EmptyRail />;
+
+  return (
+    <ul className="flex flex-col">
+      {safe.map((e) => (
+        <li
+          key={e.id}
+          className="px-4 py-3 border-b border-subtle/60 last:border-b-0"
+        >
+          <div className="text-[12px] text-ink leading-snug truncate">
+            {e.summary}
+          </div>
+          {e.detail && (
+            <div className="mt-0.5 text-[10.5px] text-ink-muted truncate">
+              {e.detail}
+            </div>
+          )}
+          <div className="mt-1 text-[10px] text-ink-faint font-mono">
+            {relativeTime(e.at)}
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -122,14 +323,15 @@ function EmptyRail() {
 }
 
 function relativeTime(iso: string): string {
+  if (!iso) return "";
   const diff = Date.now() - new Date(iso).getTime();
   if (Number.isNaN(diff)) return "";
+  if (diff < 60_000) return "now";
   const m = Math.floor(diff / 60_000);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m}m ago`;
+  if (m < 60) return `${m}m`;
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
+  if (h < 24) return `${h}h`;
   const d = Math.floor(h / 24);
-  if (d < 7) return `${d}d ago`;
+  if (d < 7) return `${d}d`;
   return new Date(iso).toLocaleDateString();
 }

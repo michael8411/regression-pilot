@@ -4,8 +4,15 @@ import type {
   JiraTransition,
   JiraTransitionResult,
   LiveBoard,
+  LiveBoardProfile,
+  LiveBoardViewPreferences,
 } from "@/types/live";
-import type { GeneratedTestCases, JiraTicket } from "@/types";
+import type {
+  GeneratedTestCases,
+  JiraProject,
+  JiraTicket,
+  JiraVersion,
+} from "@/types";
 
 const BASE =
   (import.meta.env.VITE_API_BASE as string | undefined) ?? "http://127.0.0.1:8000";
@@ -27,11 +34,15 @@ export function listLiveBoards(): Promise<LiveBoard[]> {
   return jfetch("/live/boards");
 }
 
-export function createLiveBoard(body: {
+export interface CreateLiveBoardBody {
   name: string;
   jql: string;
   columns?: string[];
-}): Promise<LiveBoard> {
+  profile?: LiveBoardProfile;
+  view_prefs?: LiveBoardViewPreferences;
+}
+
+export function createLiveBoard(body: CreateLiveBoardBody): Promise<LiveBoard> {
   return jfetch("/live/boards", {
     method: "POST",
     body: JSON.stringify(body),
@@ -42,9 +53,18 @@ export function getLiveBoard(id: string): Promise<LiveBoard> {
   return jfetch(`/live/boards/${encodeURIComponent(id)}`);
 }
 
+export interface PatchLiveBoardBody {
+  name?: string;
+  jql?: string;
+  columns?: string[];
+  pinned?: boolean;
+  profile?: LiveBoardProfile;
+  view_prefs?: LiveBoardViewPreferences;
+}
+
 export function patchLiveBoard(
   id: string,
-  patch: Partial<Pick<LiveBoard, "name" | "jql" | "columns" | "pinned">>,
+  patch: PatchLiveBoardBody,
 ): Promise<LiveBoard> {
   return jfetch(`/live/boards/${encodeURIComponent(id)}`, {
     method: "PATCH",
@@ -59,6 +79,20 @@ export function deleteLiveBoard(id: string): Promise<{ deleted: boolean }> {
 // Board read (Jira pass-through)
 export function fetchBoardTickets(jql: string): Promise<BoardResponse> {
   return jfetch(`/jira/board?jql=${encodeURIComponent(jql)}`);
+}
+
+// Phase 03 — Jira projects/versions for the simple board builder.
+export function listJiraProjectsForLive(): Promise<JiraProject[]> {
+  return jfetch("/jira/projects");
+}
+
+export function listJiraVersionsForLive(
+  projectKey: string,
+  status: "unreleased" | "released" | "all" = "unreleased",
+): Promise<JiraVersion[]> {
+  return jfetch(
+    `/jira/projects/${encodeURIComponent(projectKey)}/versions?status=${encodeURIComponent(status)}`,
+  );
 }
 
 // Comments

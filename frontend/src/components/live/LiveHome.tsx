@@ -6,7 +6,6 @@ import {
   useRegisterCommand,
   type CommandItem,
 } from "@/contexts/CommandRegistryContext";
-import { BoardCreateDialog } from "./BoardCreateDialog";
 import { BoardListSkeleton } from "./BoardListSkeleton";
 import {
   LiveActivityRail,
@@ -17,6 +16,10 @@ import {
   type LiveActivityRailEntry,
   type LiveBoardFilterChip,
 } from "./home";
+import {
+  BoardBuilderDialog,
+  type BoardBuilderSubmitPayload,
+} from "./board-builder";
 import type { LiveBoard } from "@/types/live";
 
 type DialogState =
@@ -33,6 +36,9 @@ export function LiveHome() {
     create,
     rename,
     updateJql,
+    updateColumns,
+    updateProfile,
+    updateViewPrefs,
     togglePin,
     remove,
     refresh,
@@ -40,8 +46,6 @@ export function LiveHome() {
   const [dialog, setDialog] = useState<DialogState>(null);
   const [query, setQuery] = useState("");
   const [chip, setChip] = useState<LiveBoardFilterChip>("all");
-  // Recent activity is held in memory only (Phase 06 wires the durable feed
-  // backed by the encrypted `live_activity` table — see Phase 01 contracts).
   const [recentActivity, setRecentActivity] = useState<LiveActivityRailEntry[]>(
     [],
   );
@@ -68,13 +72,19 @@ export function LiveHome() {
   );
   useRegisterCommand(newBoardCommand);
 
-  const handleSubmit = async (body: {
-    name: string;
-    jql: string;
-    columns?: string[];
-  }) => {
+  const handleSubmit = async (payload: BoardBuilderSubmitPayload) => {
     if (dialog?.kind === "create") {
-      const created = await create(body);
+      const created = await create({
+        name: payload.name,
+        jql: payload.jql,
+        columns: payload.columns,
+        profile: payload.profile,
+        view_prefs: payload.view_prefs,
+      });
+      if (payload.pinned) {
+        // The create endpoint always starts unpinned — toggle to honor builder choice.
+        await togglePin(created.id);
+      }
       recordActivity({
         id: `act-create-${created.id}-${Date.now()}`,
         summary: `Created board ${created.name}`,
@@ -86,21 +96,20 @@ export function LiveHome() {
     }
     if (dialog?.kind === "edit") {
       const id = dialog.board.id;
-      if (body.name !== dialog.board.name) await rename(id, body.name);
-      if (body.jql !== dialog.board.jql) await updateJql(id, body.jql);
+      if (payload.name !== dialog.board.name) await rename(id, payload.name);
+      if (payload.jql !== dialog.board.jql) await updateJql(id, payload.jql);
       const colsChanged =
-        JSON.stringify(body.columns ?? []) !==
+        JSON.stringify(payload.columns) !==
         JSON.stringify(dialog.board.columns ?? []);
-      if (colsChanged && body.columns) {
-        const { patchLiveBoard } = await import(
-          "@/components/live/lib/api"
-        );
-        await patchLiveBoard(id, { columns: body.columns });
-        await refresh();
+      if (colsChanged) await updateColumns(id, payload.columns);
+      await updateProfile(id, payload.profile);
+      await updateViewPrefs(id, payload.view_prefs);
+      if (payload.pinned !== dialog.board.pinned) {
+        await togglePin(id);
       }
       recordActivity({
         id: `act-update-${id}-${Date.now()}`,
-        summary: `Updated board ${body.name}`,
+        summary: `Updated board ${payload.name}`,
         at: new Date().toISOString(),
       });
     }
@@ -205,7 +214,7 @@ export function LiveHome() {
       </div>
 
       {dialog && (
-        <BoardCreateDialog
+        <BoardBuilderDialog
           initial={dialog.kind === "edit" ? dialog.board : null}
           onClose={() => setDialog(null)}
           onSubmit={handleSubmit}

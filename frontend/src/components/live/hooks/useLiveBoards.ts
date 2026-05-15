@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import * as api from "@/components/live/lib/api";
-import type { LiveBoard } from "@/types/live";
+import type {
+  LiveBoard,
+  LiveBoardProfile,
+  LiveBoardViewPreferences,
+} from "@/types/live";
 
 export interface UseLiveBoardsResult {
   boards: LiveBoard[];
@@ -8,13 +12,15 @@ export interface UseLiveBoardsResult {
   error: string | null;
 
   refresh: () => Promise<void>;
-  create: (body: {
-    name: string;
-    jql: string;
-    columns?: string[];
-  }) => Promise<LiveBoard>;
+  create: (body: api.CreateLiveBoardBody) => Promise<LiveBoard>;
   rename: (id: string, name: string) => Promise<void>;
   updateJql: (id: string, jql: string) => Promise<void>;
+  updateColumns: (id: string, columns: string[]) => Promise<void>;
+  updateProfile: (id: string, profile: LiveBoardProfile) => Promise<void>;
+  updateViewPrefs: (
+    id: string,
+    viewPrefs: LiveBoardViewPreferences,
+  ) => Promise<void>;
   togglePin: (id: string) => Promise<void>;
   remove: (id: string) => Promise<void>;
 }
@@ -51,7 +57,7 @@ export function useLiveBoards(): UseLiveBoardsResult {
   );
 
   const create = useCallback(
-    async (body: { name: string; jql: string; columns?: string[] }) => {
+    async (body: api.CreateLiveBoardBody) => {
       const created = await api.createLiveBoard(body);
       setBoards((prev) => [created, ...prev]);
       return created;
@@ -80,6 +86,53 @@ export function useLiveBoards(): UseLiveBoardsResult {
       updateLocal(id, { jql });
       try {
         const updated = await api.patchLiveBoard(id, { jql });
+        updateLocal(id, updated);
+      } catch (e) {
+        if (original) updateLocal(id, original);
+        throw e;
+      }
+    },
+    [boards, updateLocal],
+  );
+
+  const updateColumns = useCallback(
+    async (id: string, columns: string[]) => {
+      const original = boards.find((b) => b.id === id);
+      updateLocal(id, { columns });
+      try {
+        const updated = await api.patchLiveBoard(id, { columns });
+        updateLocal(id, updated);
+      } catch (e) {
+        if (original) updateLocal(id, original);
+        throw e;
+      }
+    },
+    [boards, updateLocal],
+  );
+
+  const updateProfile = useCallback(
+    async (id: string, profile: LiveBoardProfile) => {
+      const original = boards.find((b) => b.id === id);
+      updateLocal(id, { profile });
+      try {
+        const updated = await api.patchLiveBoard(id, { profile });
+        updateLocal(id, updated);
+      } catch (e) {
+        if (original) updateLocal(id, original);
+        throw e;
+      }
+    },
+    [boards, updateLocal],
+  );
+
+  const updateViewPrefs = useCallback(
+    async (id: string, viewPrefs: LiveBoardViewPreferences) => {
+      const original = boards.find((b) => b.id === id);
+      updateLocal(id, { view_prefs: viewPrefs });
+      try {
+        const updated = await api.patchLiveBoard(id, {
+          view_prefs: viewPrefs,
+        });
         updateLocal(id, updated);
       } catch (e) {
         if (original) updateLocal(id, original);
@@ -134,6 +187,9 @@ export function useLiveBoards(): UseLiveBoardsResult {
       create,
       rename,
       updateJql,
+      updateColumns,
+      updateProfile,
+      updateViewPrefs,
       togglePin,
       remove,
     }),
@@ -145,6 +201,9 @@ export function useLiveBoards(): UseLiveBoardsResult {
       create,
       rename,
       updateJql,
+      updateColumns,
+      updateProfile,
+      updateViewPrefs,
       togglePin,
       remove,
     ],

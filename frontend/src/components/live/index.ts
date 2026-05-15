@@ -15,6 +15,19 @@ export {
   type LiveActivityRailEntry,
 } from "./home";
 
+// Phase 03 — guided board builder.
+export {
+  BoardBuilderDialog,
+  SimpleBuilderStep,
+  StructureMappingStep,
+  AdvancedJqlSection,
+  BuilderPreviewPanel,
+  useBoardPreview,
+  summarizeStatuses,
+  type BoardBuilderSubmitPayload,
+  type PreviewState,
+} from "./board-builder";
+
 // Phase 01 — foundation contracts. Pure helpers and type-only exports;
 // no runtime UI is touched in this phase.
 export {

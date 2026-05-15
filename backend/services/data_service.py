@@ -12,7 +12,8 @@ except ImportError:  # pragma: no cover - supports running from backend/ as scri
 
 logger = structlog.get_logger("testdeck.data")
 
-# Tables included in export (all current Phase 7–10 tables).
+# Tables included in export (all current Phase 7–10 tables, plus the
+# Live workflow artifacts introduced by Phase 01 of the Live redesign).
 _EXPORTED_TABLES = (
     "sessions",
     "session_state",
@@ -20,6 +21,9 @@ _EXPORTED_TABLES = (
     "messages",
     "attachments",
     "live_boards",
+    "live_pinned_tickets",
+    "live_generated_cases",
+    "live_activity",
     "mcp_connections",
     "test_cycles",
     "cycle_runs",

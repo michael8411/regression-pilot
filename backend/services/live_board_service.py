@@ -53,7 +53,41 @@ def _validate_name(name: str) -> str:
     return name
 
 
+def _decrypt_profile_blob(blob: str) -> Optional[dict]:
+    """Decrypt an encrypted JSON blob; return None if empty or unreadable."""
+    if not blob:
+        return None
+    try:
+        loaded = json.loads(decrypt_value(blob))
+    except Exception:
+        logger.warning("live_board_profile_decrypt_failed")
+        return None
+    return loaded if isinstance(loaded, dict) else None
+
+
+def _encrypt_profile_blob(value: Any) -> str:
+    if value is None:
+        return ""
+    if hasattr(value, "model_dump"):
+        value = value.model_dump()
+    return encrypt_value(json.dumps(value, default=str))
+
+
 def _row_to_board(row) -> dict:
+    # Phase 01: `profile` and `view_prefs` may be missing on legacy rows
+    # that predate the migration. SQLite Row objects raise IndexError when
+    # asked for a column that doesn't exist; guard defensively.
+    profile_blob = ""
+    view_prefs_blob = ""
+    try:
+        profile_blob = row["profile"] or ""
+    except (IndexError, KeyError):
+        profile_blob = ""
+    try:
+        view_prefs_blob = row["view_prefs"] or ""
+    except (IndexError, KeyError):
+        view_prefs_blob = ""
+
     return {
         "id": row["id"],
         "name": row["name"],
@@ -62,23 +96,43 @@ def _row_to_board(row) -> dict:
         "pinned": bool(row["pinned"]),
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
+        "profile": _decrypt_profile_blob(profile_blob),
+        "view_prefs": _decrypt_profile_blob(view_prefs_blob),
     }
 
 
 async def create_board(
-    *, name: str, jql: str, columns: Optional[list[str]] = None,
+    *,
+    name: str,
+    jql: str,
+    columns: Optional[list[str]] = None,
+    profile: Any = None,
+    view_prefs: Any = None,
 ) -> dict:
     name = _validate_name(name)
     bid = str(uuid.uuid4())
     now = _now_iso()
     cols = json.dumps(columns or DEFAULT_COLUMNS)
     encrypted_jql = encrypt_value(jql)
+    profile_blob = _encrypt_profile_blob(profile)
+    view_prefs_blob = _encrypt_profile_blob(view_prefs)
 
     async with get_connection() as db:
         await db.execute(
-            "INSERT INTO live_boards (id, name, jql, columns, pinned, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, 0, ?, ?)",
-            (bid, name, encrypted_jql, cols, now, now),
+            "INSERT INTO live_boards "
+            "(id, name, jql, columns, pinned, created_at, updated_at, "
+            " profile, view_prefs) "
+            "VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?)",
+            (
+                bid,
+                name,
+                encrypted_jql,
+                cols,
+                now,
+                now,
+                profile_blob,
+                view_prefs_blob,
+            ),
         )
         await db.commit()
 
@@ -91,6 +145,10 @@ async def create_board(
         "pinned": False,
         "created_at": now,
         "updated_at": now,
+        "profile": profile.model_dump() if hasattr(profile, "model_dump") else profile,
+        "view_prefs": (
+            view_prefs.model_dump() if hasattr(view_prefs, "model_dump") else view_prefs
+        ),
     }
 
 
@@ -119,6 +177,8 @@ async def update_board(
     jql: Optional[str] = None,
     columns: Optional[list[str]] = None,
     pinned: Optional[bool] = None,
+    profile: Any = None,
+    view_prefs: Any = None,
 ) -> Optional[dict]:
     sets: list[str] = []
     params: list[Any] = []
@@ -134,6 +194,12 @@ async def update_board(
     if pinned is not None:
         sets.append("pinned = ?")
         params.append(1 if pinned else 0)
+    if profile is not None:
+        sets.append("profile = ?")
+        params.append(_encrypt_profile_blob(profile))
+    if view_prefs is not None:
+        sets.append("view_prefs = ?")
+        params.append(_encrypt_profile_blob(view_prefs))
     if not sets:
         return await get_board(board_id)
     sets.append("updated_at = ?")

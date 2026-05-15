@@ -1,26 +1,51 @@
+from typing import Optional
+
 from fastapi import APIRouter, HTTPException
 
 try:
     from backend.schemas.live_models import (
         CreateLiveBoardRequest,
+        LiveActivityCreate,
+        LiveActivityEvent,
         LiveBoardResponse,
         LiveGenerateRequest,
+        LiveGeneratedCases,
+        LiveGeneratedCasesCreate,
+        LiveGeneratedCasesPatch,
+        LivePinnedTicket,
+        LivePinnedTicketUpsert,
         UpdateLiveBoardRequest,
     )
-    from backend.services import ai_service, live_board_service
+    from backend.services import (
+        ai_service,
+        live_artifact_service,
+        live_board_service,
+    )
     from backend.utils.http_errors import upstream_error
 except ImportError:  # pragma: no cover - supports running from backend/ as script
     from schemas.live_models import (
         CreateLiveBoardRequest,
+        LiveActivityCreate,
+        LiveActivityEvent,
         LiveBoardResponse,
         LiveGenerateRequest,
+        LiveGeneratedCases,
+        LiveGeneratedCasesCreate,
+        LiveGeneratedCasesPatch,
+        LivePinnedTicket,
+        LivePinnedTicketUpsert,
         UpdateLiveBoardRequest,
     )
-    from services import ai_service, live_board_service
+    from services import ai_service, live_artifact_service, live_board_service
     from utils.http_errors import upstream_error
 
 
 router = APIRouter(prefix="/live", tags=["live"])
+
+
+# =============================================================================
+# Boards
+# =============================================================================
 
 
 @router.get("/boards", response_model=list[LiveBoardResponse])
@@ -32,7 +57,11 @@ async def list_boards():
 async def create_board(req: CreateLiveBoardRequest):
     try:
         return await live_board_service.create_board(
-            name=req.name, jql=req.jql, columns=req.columns,
+            name=req.name,
+            jql=req.jql,
+            columns=req.columns,
+            profile=req.profile,
+            view_prefs=req.view_prefs,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -55,6 +84,8 @@ async def update_board(board_id: str, req: UpdateLiveBoardRequest):
             jql=req.jql,
             columns=req.columns,
             pinned=req.pinned,
+            profile=req.profile,
+            view_prefs=req.view_prefs,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -69,6 +100,11 @@ async def delete_board(board_id: str):
     return {"deleted": deleted}
 
 
+# =============================================================================
+# Generation
+# =============================================================================
+
+
 @router.post("/generate")
 async def live_generate(req: LiveGenerateRequest):
     """Generate test cases for a single ticket. Skips grouping."""
@@ -76,3 +112,92 @@ async def live_generate(req: LiveGenerateRequest):
         return await ai_service.generate_test_cases([req.ticket], req.instructions)
     except Exception as e:
         raise upstream_error("Gemini", e)
+
+
+# =============================================================================
+# Phase 01 — Live workflow artifacts: pinned tickets, generated cases, activity
+# =============================================================================
+
+
+@router.get("/pins", response_model=list[LivePinnedTicket])
+async def list_pins():
+    return await live_artifact_service.list_pinned_tickets()
+
+
+@router.put("/pins/{ticket_key}", response_model=LivePinnedTicket)
+async def upsert_pin(ticket_key: str, req: LivePinnedTicketUpsert):
+    try:
+        return await live_artifact_service.upsert_pinned_ticket(ticket_key, req)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/pins/{ticket_key}")
+async def delete_pin(ticket_key: str):
+    deleted = await live_artifact_service.delete_pinned_ticket(ticket_key)
+    return {"deleted": deleted}
+
+
+@router.get("/generated-cases", response_model=list[LiveGeneratedCases])
+async def list_generated_cases(ticket_key: Optional[str] = None):
+    return await live_artifact_service.list_generated_cases(
+        ticket_key=ticket_key
+    )
+
+
+@router.post("/generated-cases", response_model=LiveGeneratedCases, status_code=201)
+async def create_generated_cases(req: LiveGeneratedCasesCreate):
+    return await live_artifact_service.create_generated_cases(req)
+
+
+@router.patch(
+    "/generated-cases/{case_set_id}",
+    response_model=LiveGeneratedCases,
+)
+async def patch_generated_cases(case_set_id: str, req: LiveGeneratedCasesPatch):
+    updated = await live_artifact_service.patch_generated_cases(case_set_id, req)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Generated cases not found")
+    return updated
+
+
+@router.delete("/generated-cases/{case_set_id}")
+async def delete_generated_cases(case_set_id: str):
+    deleted = await live_artifact_service.delete_generated_cases(case_set_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Generated cases not found")
+    return {"deleted": True}
+
+
+@router.post("/generated-cases/{case_set_id}/publish")
+async def publish_generated_cases(case_set_id: str):
+    """Phase 01 stub — Phase 06b implements the Jira/Zephyr publish flow.
+
+    Returns 501 so callers can probe the endpoint and the route is reserved
+    in the API surface. The contract is locked here so frontend hooks can
+    be wired in subsequent phases without renaming endpoints later.
+    """
+    raise HTTPException(
+        status_code=501,
+        detail="Publish-to-Jira is not implemented yet (Phase 06b).",
+    )
+
+
+@router.get("/activity", response_model=list[LiveActivityEvent])
+async def list_activity(
+    board_id: Optional[str] = None, limit: int = 100
+):
+    return await live_artifact_service.list_activity(
+        board_id=board_id, limit=limit
+    )
+
+
+@router.post("/activity", response_model=LiveActivityEvent, status_code=201)
+async def create_activity(req: LiveActivityCreate):
+    return await live_artifact_service.create_activity(req)
+
+
+@router.delete("/activity")
+async def clear_activity(board_id: Optional[str] = None):
+    count = await live_artifact_service.clear_activity(board_id=board_id)
+    return {"deleted": count}

@@ -17,6 +17,12 @@ try:
         CREATE_CYCLE_RUNS_TABLE,
         CREATE_CYCLE_RUNS_INDEX,
         CREATE_MCP_CONNECTIONS_TABLE,
+        CREATE_LIVE_PINNED_TICKETS_TABLE,
+        CREATE_LIVE_GENERATED_CASES_TABLE,
+        CREATE_LIVE_GENERATED_CASES_INDEX,
+        CREATE_LIVE_ACTIVITY_TABLE,
+        CREATE_LIVE_ACTIVITY_CREATED_INDEX,
+        CREATE_LIVE_ACTIVITY_BOARD_INDEX,
     )
     from backend.utils.crypto import encrypt_value, get_encryptor
 except ImportError:  # pragma: no cover - supports running from backend/ as script
@@ -36,6 +42,12 @@ except ImportError:  # pragma: no cover - supports running from backend/ as scri
         CREATE_CYCLE_RUNS_TABLE,
         CREATE_CYCLE_RUNS_INDEX,
         CREATE_MCP_CONNECTIONS_TABLE,
+        CREATE_LIVE_PINNED_TICKETS_TABLE,
+        CREATE_LIVE_GENERATED_CASES_TABLE,
+        CREATE_LIVE_GENERATED_CASES_INDEX,
+        CREATE_LIVE_ACTIVITY_TABLE,
+        CREATE_LIVE_ACTIVITY_CREATED_INDEX,
+        CREATE_LIVE_ACTIVITY_BOARD_INDEX,
     )
     from utils.crypto import encrypt_value, get_encryptor
 
@@ -63,14 +75,47 @@ async def init_db() -> None:
         await db.execute(CREATE_CYCLE_RUNS_TABLE)
         await db.execute(CREATE_CYCLE_RUNS_INDEX)
         await db.execute(CREATE_MCP_CONNECTIONS_TABLE)
+        # Phase 01 — Live workflow durable storage.
+        await db.execute(CREATE_LIVE_PINNED_TICKETS_TABLE)
+        await db.execute(CREATE_LIVE_GENERATED_CASES_TABLE)
+        await db.execute(CREATE_LIVE_GENERATED_CASES_INDEX)
+        await db.execute(CREATE_LIVE_ACTIVITY_TABLE)
+        await db.execute(CREATE_LIVE_ACTIVITY_CREATED_INDEX)
+        await db.execute(CREATE_LIVE_ACTIVITY_BOARD_INDEX)
         await db.commit()
 
         get_encryptor()
 
         rows_migrated = await _migrate_plaintext_state_rows(db)
         await _migrate_attachments_kind_check(db)
+        await _migrate_live_boards_profile_columns(db)
 
     logger.info("db_initialized", rows_migrated=rows_migrated)
+
+
+async def _migrate_live_boards_profile_columns(db) -> None:
+    """Phase 01 (Live Testing redesign): add `profile` + `view_prefs` columns.
+
+    Existing rows keep their defaults of `''` (empty/unset) so the service
+    layer treats them as "no profile recorded yet". Idempotent — uses
+    PRAGMA table_info before each ALTER.
+    """
+    cursor = await db.execute("PRAGMA table_info(live_boards)")
+    cols = {row["name"] for row in await cursor.fetchall()}
+    changed = False
+    if "profile" not in cols:
+        await db.execute(
+            "ALTER TABLE live_boards ADD COLUMN profile TEXT NOT NULL DEFAULT ''"
+        )
+        changed = True
+    if "view_prefs" not in cols:
+        await db.execute(
+            "ALTER TABLE live_boards ADD COLUMN view_prefs TEXT NOT NULL DEFAULT ''"
+        )
+        changed = True
+    if changed:
+        await db.commit()
+        logger.info("live_boards_profile_columns_migrated")
 
 
 async def _migrate_attachments_kind_check(db) -> None:

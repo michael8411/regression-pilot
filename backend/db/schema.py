@@ -71,13 +71,77 @@ CREATE TABLE IF NOT EXISTS live_boards (
     columns     TEXT NOT NULL DEFAULT '[]',
     pinned      INTEGER NOT NULL DEFAULT 0,
     created_at  TEXT NOT NULL,
-    updated_at  TEXT NOT NULL
+    updated_at  TEXT NOT NULL,
+    profile     TEXT NOT NULL DEFAULT '',
+    view_prefs  TEXT NOT NULL DEFAULT ''
 )
 """
 
 CREATE_LIVE_BOARDS_INDEX = """
 CREATE INDEX IF NOT EXISTS idx_live_boards_pinned_updated
     ON live_boards (pinned DESC, updated_at DESC)
+"""
+
+# ---------------------------------------------------------------------------
+# Live workflow artifacts — Phase 01 of Live Testing redesign.
+#
+# Sensitive payload columns are stored as encrypted JSON strings (Fernet);
+# the columns themselves are TEXT NOT NULL DEFAULT '' so legacy rows stay
+# valid. The application layer is responsible for encrypt/decrypt via
+# `utils.crypto`; the schema does not constrain content beyond that.
+# ---------------------------------------------------------------------------
+
+CREATE_LIVE_PINNED_TICKETS_TABLE = """
+CREATE TABLE IF NOT EXISTS live_pinned_tickets (
+    ticket_key       TEXT PRIMARY KEY,
+    board_id         TEXT,
+    ticket_snapshot  TEXT NOT NULL DEFAULT '',
+    created_at       TEXT NOT NULL,
+    updated_at       TEXT NOT NULL
+)
+"""
+
+CREATE_LIVE_GENERATED_CASES_TABLE = """
+CREATE TABLE IF NOT EXISTS live_generated_cases (
+    id                TEXT PRIMARY KEY,
+    ticket_key        TEXT NOT NULL,
+    board_id          TEXT,
+    instructions      TEXT NOT NULL DEFAULT '',
+    cases_json        TEXT NOT NULL,
+    context_metadata  TEXT NOT NULL DEFAULT '',
+    export_metadata   TEXT NOT NULL DEFAULT '',
+    status            TEXT NOT NULL DEFAULT 'draft',
+    exported_at       TEXT,
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL
+)
+"""
+
+CREATE_LIVE_GENERATED_CASES_INDEX = """
+CREATE INDEX IF NOT EXISTS idx_live_generated_cases_ticket
+    ON live_generated_cases (ticket_key, updated_at DESC)
+"""
+
+CREATE_LIVE_ACTIVITY_TABLE = """
+CREATE TABLE IF NOT EXISTS live_activity (
+    id          TEXT PRIMARY KEY,
+    board_id    TEXT,
+    ticket_key  TEXT,
+    kind        TEXT NOT NULL,
+    summary     TEXT NOT NULL DEFAULT '',
+    detail      TEXT NOT NULL DEFAULT '',
+    created_at  TEXT NOT NULL
+)
+"""
+
+CREATE_LIVE_ACTIVITY_CREATED_INDEX = """
+CREATE INDEX IF NOT EXISTS idx_live_activity_created
+    ON live_activity (created_at DESC)
+"""
+
+CREATE_LIVE_ACTIVITY_BOARD_INDEX = """
+CREATE INDEX IF NOT EXISTS idx_live_activity_board
+    ON live_activity (board_id, created_at DESC)
 """
 
 CREATE_TEST_CYCLES_TABLE = """

@@ -9,7 +9,8 @@ export type FeatureFlag =
   | "mcpV2"
   | "testCycles"
   | "settingsV2"
-  | "lightTheme";
+  | "lightTheme"
+  | "liveTestingRedesignV1";
 
 const DEFAULTS: Record<FeatureFlag, boolean> = {
   workspaceSwitcher: true,
@@ -23,6 +24,10 @@ const DEFAULTS: Record<FeatureFlag, boolean> = {
   testCycles: true,
   settingsV2: true,
   lightTheme: true, // keep the old light theme available while refactoring
+  // Live Testing redesign rollout. Off by default until the final rollout
+  // phase; Phase 01 only locks contracts and runtime paths must not depend
+  // on this flag yet.
+  liveTestingRedesignV1: false,
 };
 
 /**

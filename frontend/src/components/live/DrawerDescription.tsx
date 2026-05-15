@@ -1,17 +1,29 @@
+/**
+ * Phase 05 — drawer description renderer.
+ *
+ * Renders inside <MarkdownPanel> per the visual contract. Used as the
+ * top body of the Description tab.
+ */
+
 import { Markdown } from "@/components/assistant/lib/markdown";
+import { MarkdownPanel } from "@/components/live/visual";
 
 export function DrawerDescription({ description }: { description: string }) {
   return (
-    <section className="px-4 py-3 border-b border-subtle">
-      <h3 className="text-[10.5px] uppercase tracking-wide text-ink-faint font-semibold mb-2">
+    <section>
+      <h3 className="text-[10px] uppercase tracking-wider text-ink-muted font-mono mb-1.5">
         Description
       </h3>
       {description?.trim() ? (
-        <div className="markdown-content text-[12px] text-ink-secondary leading-relaxed">
+        <MarkdownPanel>
           <Markdown source={description} />
-        </div>
+        </MarkdownPanel>
       ) : (
-        <p className="text-[12px] text-ink-faint">No description.</p>
+        <MarkdownPanel>
+          <p className="text-[11.5px] text-ink-faint italic">
+            No description provided.
+          </p>
+        </MarkdownPanel>
       )}
     </section>
   );

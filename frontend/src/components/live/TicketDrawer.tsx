@@ -1,6 +1,27 @@
-import { useEffect, useRef, useState } from "react";
+/**
+ * Phase 05 — tabbed ticket drawer.
+ *
+ * Five tabs: Description · Comments · Attachments · Test Cases · AI.
+ * A sticky CTA "Generate test cases for this ticket · Ctrl G" sits in the
+ * footer on every tab and triggers the AI panel's generate handler.
+ *
+ * Preserved behaviors:
+ *  - Escape closes, focus returns to the previously-active element.
+ *  - Body scroll is locked while open.
+ *  - Pin/unpin survives.
+ *  - Comment composer survives.
+ *  - Generation pipeline is unchanged (re-uses useLiveGenerate).
+ */
+
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { clsx } from "clsx";
+import { Sparkles } from "@/lib/icons";
 import { useTicketDetail } from "./hooks/useTicketDetail";
 import { usePinnedKeys } from "./hooks/usePinnedKeys";
 import { DrawerHeader } from "./DrawerHeader";
@@ -8,12 +29,21 @@ import { DrawerSummary } from "./DrawerSummary";
 import { DrawerDescription } from "./DrawerDescription";
 import { CommentsThread } from "./CommentsThread";
 import { CommentComposer } from "./CommentComposer";
-import { LiveGeneratePanel } from "./LiveGeneratePanel";
+import {
+  DrawerAiPanel,
+  DrawerAttachmentsPanel,
+  DrawerCasesPanel,
+  DrawerTabs,
+  type DrawerAiPanelHandle,
+  type DrawerTabItem,
+} from "./drawer";
 
 interface Props {
   ticketKey: string;
   onClose: () => void;
 }
+
+type TabId = "description" | "comments" | "attachments" | "cases" | "ai";
 
 export function TicketDrawer({ ticketKey, onClose }: Props) {
   const { ticket, loading, error, refresh, addLocalComment } =
@@ -21,12 +51,21 @@ export function TicketDrawer({ ticketKey, onClose }: Props) {
   const { isPinned, toggle } = usePinnedKeys();
   const drawerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
-  const [showGenerate, setShowGenerate] = useState(false);
+  const aiPanelRef = useRef<DrawerAiPanelHandle | null>(null);
+  const [activeTab, setActiveTab] = useState<TabId>("description");
 
+  // Focus management + Esc + Ctrl-G generation hotkey.
   useEffect(() => {
     triggerRef.current = (document.activeElement as HTMLElement) ?? null;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (e.ctrlKey && (e.key === "g" || e.key === "G")) {
+        e.preventDefault();
+        aiPanelRef.current?.generate();
+      }
     };
     document.addEventListener("keydown", onKey);
     drawerRef.current?.focus();
@@ -38,6 +77,22 @@ export function TicketDrawer({ ticketKey, onClose }: Props) {
       triggerRef.current?.focus();
     };
   }, [onClose]);
+
+  const handleGenerateCTA = useCallback(() => {
+    aiPanelRef.current?.generate();
+  }, []);
+
+  const goToAiTab = useCallback(() => setActiveTab("ai"), []);
+
+  const commentCount = ticket?.comments?.length ?? 0;
+
+  const tabs: DrawerTabItem[] = [
+    { id: "description", label: "Description" },
+    { id: "comments", label: "Comments", count: commentCount },
+    { id: "attachments", label: "Attachments", count: 0 },
+    { id: "cases", label: "Test Cases", count: 0 },
+    { id: "ai", label: "AI", variant: "ai" },
+  ];
 
   return createPortal(
     <>
@@ -53,7 +108,7 @@ export function TicketDrawer({ ticketKey, onClose }: Props) {
         aria-label={`Ticket ${ticketKey}`}
         tabIndex={-1}
         className={clsx(
-          "fixed top-0 right-0 z-[7700] h-full w-[480px] max-w-[90vw]",
+          "fixed top-0 right-0 z-[7700] h-full w-[640px] max-w-[90vw]",
           "border-l border-subtle bg-surface-elevated shadow-float",
           "flex flex-col animate-slide-in-right",
           "focus:outline-none",
@@ -66,6 +121,14 @@ export function TicketDrawer({ ticketKey, onClose }: Props) {
           onTogglePin={() => toggle(ticketKey)}
           onClose={onClose}
         />
+
+        {ticket && (
+          <DrawerTabs
+            items={tabs}
+            activeId={activeTab}
+            onChange={(id) => setActiveTab(id as TabId)}
+          />
+        )}
 
         <div className="flex-1 overflow-y-auto">
           {loading && !ticket ? (
@@ -83,29 +146,55 @@ export function TicketDrawer({ ticketKey, onClose }: Props) {
             </div>
           ) : !ticket ? null : (
             <>
-              <DrawerSummary ticket={ticket} />
-              <DrawerDescription description={ticket.description} />
-              <CommentsThread comments={ticket.comments} />
-
-              {showGenerate && (
-                <LiveGeneratePanel
-                  ticket={ticket}
-                  onClose={() => setShowGenerate(false)}
-                />
+              {activeTab === "description" && (
+                <div
+                  id="drawer-panel-description"
+                  role="tabpanel"
+                  aria-labelledby="drawer-tab-description"
+                  className="px-4 py-3 flex flex-col gap-4"
+                >
+                  <DrawerSummary ticket={ticket} />
+                  <DrawerDescription description={ticket.description} />
+                </div>
               )}
 
-              <div className="px-4 py-3">
-                <button
-                  type="button"
-                  onClick={() => setShowGenerate((v) => !v)}
-                  className="g-btn text-[12px] w-full"
-                >
-                  {showGenerate ? "Hide generator" : "Generate live test cases"}
-                </button>
-              </div>
+              {activeTab === "comments" && (
+                <div className="px-4 py-3">
+                  <CommentsThread comments={ticket.comments} />
+                </div>
+              )}
+
+              {activeTab === "attachments" && <DrawerAttachmentsPanel />}
+
+              {activeTab === "cases" && <DrawerCasesPanel onGoToAi={goToAiTab} />}
+
+              {activeTab === "ai" && (
+                <DrawerAiPanel ref={aiPanelRef} ticket={ticket} />
+              )}
             </>
           )}
         </div>
+
+        {/* Sticky AI CTA — visible on every tab */}
+        {ticket && (
+          <div className="border-t border-subtle px-3 py-2 bg-surface-elevated">
+            <button
+              type="button"
+              onClick={handleGenerateCTA}
+              className={clsx(
+                "w-full flex items-center justify-center gap-2 rounded-full",
+                "px-3 py-2 text-[12px] font-medium text-ai",
+                "transition-shadow hover:shadow-ai",
+              )}
+              style={{ background: "var(--ai-dim)" }}
+              title="Generate test cases (Ctrl G)"
+            >
+              <Sparkles size={12} />
+              <span>Generate test cases for this ticket</span>
+              <span className="text-[10px] font-mono opacity-70">Ctrl G</span>
+            </button>
+          </div>
+        )}
 
         {ticket && (
           <CommentComposer

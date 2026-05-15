@@ -5,8 +5,9 @@ import { Button } from "@/components/ui";
 import { APP_VERSION, getBuildHash } from "@/lib/version";
 import { SettingsPaneHeader } from "../SettingsPaneHeader";
 
-const BASE =
-  (import.meta.env.VITE_API_BASE as string | undefined) ?? "http://127.0.0.1:8000";
+import { apiUrl } from "@/lib/http";
+
+const HEALTH_URL = apiUrl("/health");
 
 const REPO_URL = "https://github.com/michael8411/regression-pilot";
 
@@ -17,7 +18,7 @@ export function AboutPane() {
     let cancelled = false;
     void (async () => {
       try {
-        const res = await fetch(`${BASE}/health`);
+        const res = await fetch(HEALTH_URL);
         if (!res.ok) return;
         const body = await res.json();
         if (cancelled) return;

@@ -15,20 +15,9 @@ import type {
   SaveStateRequest,
   SaveStateResponse
 } from "@/types";
+import { apiUrl, http } from "@/lib/http";
 
-const BASE = "http://127.0.0.1:8000";
-
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const resp = await fetch(`${BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
-  if (!resp.ok) {
-    const body = await resp.json().catch(() => ({ detail: resp.statusText }));
-    throw new Error(body.detail || `HTTP ${resp.status}`);
-  }
-  return resp.json();
-}
+const request = http;
 
 export async function getHealth() {
   return request<{ status: string; jira_configured: boolean; ai_configured: boolean }>("/health");
@@ -92,7 +81,7 @@ export async function* streamChatMessage(
   messages: ChatMessage[],
   tickets?: JiraTicket[]
 ): AsyncGenerator<string> {
-  const resp = await fetch(`${BASE}/ai/chat/stream`, {
+  const resp = await fetch(apiUrl("/ai/chat/stream"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ messages, tickets }),

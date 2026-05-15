@@ -62,11 +62,6 @@ export interface LiveBoardThroughputPoint {
   done: number;
 }
 
-export interface LiveBoardThroughput {
-  /** Always 7 slots — oldest to newest day, inclusive of today. */
-  points: LiveBoardThroughputPoint[];
-}
-
 export interface LiveBoardInsights {
   funnel: LiveBoardFunnel;
   /** ready + testing — "currently moving through QA". */

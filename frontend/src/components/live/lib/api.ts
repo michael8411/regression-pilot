@@ -19,20 +19,7 @@ import type {
   JiraVersion,
 } from "@/types";
 
-const BASE =
-  (import.meta.env.VITE_API_BASE as string | undefined) ?? "http://127.0.0.1:8000";
-
-async function jfetch<T>(input: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${input}`, {
-    headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
-    ...init,
-  });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(`${res.status} ${res.statusText}: ${detail.slice(0, 200)}`);
-  }
-  return res.json() as Promise<T>;
-}
+import { http as jfetch } from "@/lib/http";
 
 // Boards CRUD
 export function listLiveBoards(): Promise<LiveBoard[]> {

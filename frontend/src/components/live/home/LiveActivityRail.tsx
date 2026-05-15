@@ -3,6 +3,7 @@ import { useCommandRegistry } from "@/contexts/CommandRegistryContext";
 
 /**
  * Phase 02 — sticky activity rail.
+ * Phase 04 patch — elevated surface + pulsing accent dot per visual contract.
  *
  * Render a production-safe placeholder strategy: in-memory recent events
  * are surfaced when callers pass them, otherwise we show an empty-state
@@ -48,10 +49,21 @@ export function LiveActivityRail({ entries }: Props) {
   return (
     <aside
       aria-label="Live activity"
-      className="hidden lg:flex sticky top-0 self-start w-[280px] shrink-0 flex-col h-full border-l border-subtle bg-surface"
+      className="hidden lg:flex sticky top-0 self-start w-[280px] shrink-0 flex-col h-full border-l border-subtle bg-surface-elevated rounded-xl overflow-hidden"
     >
       <div className="flex items-center justify-between px-4 py-3 border-b border-subtle">
         <div className="flex items-center gap-1.5 text-ink">
+          {/* Pulsing accent dot — live indicator */}
+          <span className="relative inline-flex items-center justify-center w-2.5 h-2.5 shrink-0">
+            <span
+              className="absolute inline-flex w-full h-full rounded-full opacity-60 animate-ping"
+              style={{ background: "var(--accent)" }}
+            />
+            <span
+              className="relative inline-flex rounded-full w-1.5 h-1.5"
+              style={{ background: "var(--accent)" }}
+            />
+          </span>
           <Activity size={12} className="text-accent-text" />
           <h2 className="text-[12px] font-semibold">Activity</h2>
         </div>

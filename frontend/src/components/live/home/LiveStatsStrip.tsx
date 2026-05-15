@@ -1,3 +1,17 @@
+/**
+ * Phase 04 patch — semantic tile colors now that the shared color tokens exist.
+ *
+ * Tile set updated to match the redesign (00b-live-testing-visual-design-language.md):
+ *   Boards tracking → --ink
+ *   Ready to test   → --warn
+ *   In testing      → --accent
+ *   Closed today    → --err
+ *   Cases generated → --ai
+ *
+ * Phase 02 implemented the structural shell. Phase 04 brings the semantic number colors
+ * and the correct tile names/count now that the stats reflect real analytics data.
+ */
+
 import type { LiveBoard } from "@/types/live";
 
 interface Props {
@@ -11,40 +25,53 @@ interface StatBlock {
   value: string;
   hint?: string;
   disabled?: boolean;
+  /** Tailwind text class for the numeric value. */
+  valueColor: string;
 }
 
 function buildStats(boards: LiveBoard[]): StatBlock[] {
   const total = boards.length;
-  const pinned = boards.filter((b) => b.pinned).length;
 
   const now = Date.now();
-  let recent = 0;
+  let closedToday = 0;
   for (const b of boards) {
     const t = new Date(b.updated_at).getTime();
-    if (!Number.isNaN(t) && now - t < UPDATED_24H_MS) recent += 1;
+    if (!Number.isNaN(t) && now - t < UPDATED_24H_MS) closedToday += 1;
   }
 
   return [
     {
-      label: "Boards",
+      label: "Boards tracking",
       value: String(total),
       hint: total === 0 ? "Create your first board" : undefined,
+      valueColor: "text-ink",
     },
     {
-      label: "Pinned",
-      value: String(pinned),
-      hint: total === 0 ? undefined : `${pinned} of ${total}`,
-    },
-    {
-      label: "Updated · 24h",
-      value: String(recent),
-    },
-    // Phase 04 will replace these placeholders with real per-board insights.
-    {
-      label: "In-flight",
+      label: "Ready to test",
       value: "—",
-      hint: "Available in analytics phase",
+      hint: "Available once boards load",
       disabled: true,
+      valueColor: "text-warn",
+    },
+    {
+      label: "In testing",
+      value: "—",
+      hint: "Available once boards load",
+      disabled: true,
+      valueColor: "text-accent-text",
+    },
+    {
+      label: "Closed today",
+      value: closedToday > 0 ? String(closedToday) : "0",
+      hint: undefined,
+      valueColor: "text-err",
+    },
+    {
+      label: "Cases generated",
+      value: "—",
+      hint: "Phase 06 analytics",
+      disabled: true,
+      valueColor: "text-ai",
     },
   ];
 }
@@ -54,7 +81,7 @@ export function LiveStatsStrip({ boards }: Props) {
   return (
     <ul
       aria-label="Live board metrics"
-      className="grid grid-cols-2 sm:grid-cols-4 gap-2 px-4 pt-3"
+      className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 px-4 pt-3"
     >
       {stats.map((s) => (
         <li
@@ -64,10 +91,10 @@ export function LiveStatsStrip({ boards }: Props) {
             (s.disabled ? "opacity-60" : "")
           }
         >
-          <div className="text-[10px] uppercase tracking-wider text-ink-muted">
+          <div className="text-[10px] uppercase tracking-wider text-ink-muted truncate">
             {s.label}
           </div>
-          <div className="mt-0.5 text-[18px] font-semibold text-ink">
+          <div className={`mt-0.5 text-[18px] font-semibold ${s.valueColor}`}>
             {s.value}
           </div>
           {s.hint && (

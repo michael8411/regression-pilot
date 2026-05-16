@@ -14,12 +14,15 @@ try:
         LiveGeneratedCasesPatch,
         LivePinnedTicket,
         LivePinnedTicketUpsert,
+        LivePublishCasesRequest,
+        LivePublishCasesResponse,
         UpdateLiveBoardRequest,
     )
     from backend.services import (
         ai_service,
         live_artifact_service,
         live_board_service,
+        live_publish_service,
     )
     from backend.utils.http_errors import upstream_error
 except ImportError:  # pragma: no cover - supports running from backend/ as script
@@ -34,9 +37,16 @@ except ImportError:  # pragma: no cover - supports running from backend/ as scri
         LiveGeneratedCasesPatch,
         LivePinnedTicket,
         LivePinnedTicketUpsert,
+        LivePublishCasesRequest,
+        LivePublishCasesResponse,
         UpdateLiveBoardRequest,
     )
-    from services import ai_service, live_artifact_service, live_board_service
+    from services import (
+        ai_service,
+        live_artifact_service,
+        live_board_service,
+        live_publish_service,
+    )
     from utils.http_errors import upstream_error
 
 
@@ -169,18 +179,39 @@ async def delete_generated_cases(case_set_id: str):
     return {"deleted": True}
 
 
-@router.post("/generated-cases/{case_set_id}/publish")
-async def publish_generated_cases(case_set_id: str):
-    """Phase 01 stub — Phase 06b implements the Jira/Zephyr publish flow.
+_PUBLISH_ERROR_STATUS: dict[str, int] = {
+    "case_set_not_found": 404,
+    "missing_ticket_key": 400,
+    "missing_project_key": 400,
+    "no_cases_in_set": 400,
+    "no_cases_selected": 400,
+    "invalid_case_index": 400,
+    "duplicate_publish_unconfirmed": 409,
+}
 
-    Returns 501 so callers can probe the endpoint and the route is reserved
-    in the API surface. The contract is locked here so frontend hooks can
-    be wired in subsequent phases without renaming endpoints later.
+
+@router.post(
+    "/generated-cases/{case_set_id}/publish",
+    response_model=LivePublishCasesResponse,
+)
+async def publish_generated_cases(
+    case_set_id: str, req: LivePublishCasesRequest
+):
+    """Phase 06b — publish a generated case set back to the Jira ticket.
+
+    Primary path: create Zephyr Scale test cases linked to the source Jira
+    issue so they appear in the ticket's Test Cases panel. Fallback path:
+    post a structured Jira comment with the cases. The response truthfully
+    reports whether the result appears on the Jira ticket via
+    `appears_on_jira_ticket`.
     """
-    raise HTTPException(
-        status_code=501,
-        detail="Publish-to-Jira is not implemented yet (Phase 06b).",
-    )
+    try:
+        return await live_publish_service.publish_generated_cases(
+            case_set_id, req
+        )
+    except live_publish_service.PublishError as e:
+        status = _PUBLISH_ERROR_STATUS.get(e.code, 400)
+        raise HTTPException(status_code=status, detail=str(e))
 
 
 @router.get("/activity", response_model=list[LiveActivityEvent])

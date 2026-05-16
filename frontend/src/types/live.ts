@@ -139,7 +139,80 @@ export type LiveGeneratedCasesStatus =
   | "draft"
   | "exporting"
   | "exported"
-  | "failed";
+  | "failed"
+  // Phase 06b — publish-to-Jira status states.
+  | "accepted"
+  | "partial_export"
+  | "commented"
+  | "discarded";
+
+// =============================================================================
+// Live publish-to-Jira contracts (Phase 06b)
+// =============================================================================
+
+export type LivePublishMode = "linked_test_cases" | "jira_comment";
+export type LivePublishTarget =
+  | "zephyr_linked_tests"
+  | "jira_comment"
+  | "none";
+
+export interface LivePublishCasesRequest {
+  ticket_key: string;
+  project_key: string;
+  /** When undefined or empty, publish all cases in the set. */
+  case_indexes?: number[] | null;
+  mode: LivePublishMode;
+  fallback_to_comment: boolean;
+  folder_id?: number | null;
+  /** Required for re-publish after status is exported/partial_export/commented. */
+  confirm_duplicate?: boolean;
+}
+
+export interface LiveCreatedTestCase {
+  name: string;
+  key?: string | null;
+  id?: string | null;
+  self_url?: string | null;
+}
+
+export interface LiveFailedPublishCase {
+  name: string;
+  error: string;
+}
+
+export interface LiveJiraCommentResult {
+  id: string;
+  ticket_key: string;
+  author?: string | null;
+  created?: string | null;
+  url?: string | null;
+}
+
+export interface LivePublishCasesResponse {
+  status: LiveGeneratedCasesStatus;
+  target: LivePublishTarget;
+  created: number;
+  created_test_cases: LiveCreatedTestCase[];
+  failed: LiveFailedPublishCase[];
+  jira_comment: LiveJiraCommentResult | null;
+  appears_on_jira_ticket: boolean;
+  duplicate_attempt: boolean;
+  message?: string | null;
+  exported_at?: string | null;
+}
+
+export interface LiveExportMetadata {
+  target: LivePublishTarget;
+  source_ticket_key: string;
+  project_key: string;
+  selected_case_indexes: number[];
+  created_test_cases: LiveCreatedTestCase[];
+  failed: LiveFailedPublishCase[];
+  jira_comment: LiveJiraCommentResult | null;
+  appears_on_jira_ticket: boolean;
+  published_at: string;
+  duplicate_attempt: boolean;
+}
 
 export interface LiveGeneratedCases {
   id: string;

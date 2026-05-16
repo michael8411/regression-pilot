@@ -11,6 +11,8 @@ import type {
   LiveGeneratedCases,
   LiveGeneratedCasesStatus,
   LivePinnedTicket,
+  LivePublishCasesRequest,
+  LivePublishCasesResponse,
 } from "@/types/live";
 import type {
   GeneratedTestCases,
@@ -234,6 +236,22 @@ export function deleteLiveGeneratedCases(
   return jfetch(`/live/generated-cases/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
+}
+
+// Phase 06b — publish a generated case set back to the source Jira ticket.
+// Primary path links to Zephyr Scale test cases on the Jira issue; fallback
+// posts a structured Jira comment.
+export function publishLiveGeneratedCases(
+  caseSetId: string,
+  request: LivePublishCasesRequest,
+): Promise<LivePublishCasesResponse> {
+  return jfetch(
+    `/live/generated-cases/${encodeURIComponent(caseSetId)}/publish`,
+    {
+      method: "POST",
+      body: JSON.stringify(request),
+    },
+  );
 }
 
 // --- Activity feed ---------------------------------------------------------

@@ -144,8 +144,97 @@ class LivePinnedTicket(BaseModel):
 
 
 LiveGeneratedCasesStatus = Literal[
-    "draft", "exporting", "exported", "failed"
+    "draft",
+    "exporting",
+    "exported",
+    "failed",
+    # Phase 06b — publish-to-Jira status states.
+    "accepted",
+    "partial_export",
+    "commented",
+    "discarded",
 ]
+
+
+# =============================================================================
+# Phase 06b — publish-to-Jira contracts
+# =============================================================================
+
+
+LivePublishMode = Literal["linked_test_cases", "jira_comment"]
+LivePublishTarget = Literal[
+    "zephyr_linked_tests", "jira_comment", "none"
+]
+
+
+class LivePublishCasesRequest(BaseModel):
+    """Payload for `POST /live/generated-cases/{id}/publish`."""
+
+    ticket_key: str = Field(min_length=1, max_length=64)
+    project_key: str = Field(min_length=1, max_length=64)
+    case_indexes: Optional[list[int]] = None
+    """When None or empty, publish all cases in the set."""
+    mode: LivePublishMode = "linked_test_cases"
+    fallback_to_comment: bool = True
+    folder_id: Optional[int] = None
+    """Optional Zephyr folder for created test cases."""
+    confirm_duplicate: bool = False
+    """Customer acknowledged the case set was already published."""
+
+
+class LiveCreatedTestCase(BaseModel):
+    """A test case successfully created by Zephyr."""
+
+    name: str
+    key: Optional[str] = None
+    id: Optional[str] = None
+    self_url: Optional[str] = None
+    """Zephyr-provided self link; may be missing for some Zephyr versions."""
+
+
+class LiveFailedPublishCase(BaseModel):
+    """A test case that could not be created or linked."""
+
+    name: str
+    error: str
+
+
+class LiveJiraCommentResult(BaseModel):
+    """Sanitized Jira comment metadata returned to the UI."""
+
+    id: str
+    ticket_key: str
+    author: Optional[str] = None
+    created: Optional[str] = None
+    url: Optional[str] = None
+
+
+class LivePublishCasesResponse(BaseModel):
+    status: LiveGeneratedCasesStatus
+    target: LivePublishTarget
+    created: int = 0
+    created_test_cases: list[LiveCreatedTestCase] = Field(default_factory=list)
+    failed: list[LiveFailedPublishCase] = Field(default_factory=list)
+    jira_comment: Optional[LiveJiraCommentResult] = None
+    appears_on_jira_ticket: bool = False
+    duplicate_attempt: bool = False
+    message: Optional[str] = None
+    exported_at: Optional[str] = None
+
+
+class LiveExportMetadata(BaseModel):
+    """Persisted on `live_generated_cases.export_metadata`. Encrypted at rest."""
+
+    target: LivePublishTarget
+    source_ticket_key: str
+    project_key: str = ""
+    selected_case_indexes: list[int] = Field(default_factory=list)
+    created_test_cases: list[LiveCreatedTestCase] = Field(default_factory=list)
+    failed: list[LiveFailedPublishCase] = Field(default_factory=list)
+    jira_comment: Optional[LiveJiraCommentResult] = None
+    appears_on_jira_ticket: bool = False
+    published_at: str
+    duplicate_attempt: bool = False
 
 
 class LiveGeneratedCasesCreate(BaseModel):

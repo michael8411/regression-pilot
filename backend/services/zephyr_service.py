@@ -14,6 +14,19 @@ class ZephyrStepUploadError(Exception):
         self.created_test_case = created_test_case
 
 
+class ZephyrIssueLinkError(Exception):
+    """Raised when a test case was created but linking to the Jira issue failed.
+
+    The created test case is preserved so the caller can decide whether the
+    publish attempt counts as a partial success (the test exists in Zephyr but
+    will not appear in the Jira ticket's Test Cases panel).
+    """
+
+    def __init__(self, message: str, *, created_test_case: dict):
+        super().__init__(message)
+        self.created_test_case = created_test_case
+
+
 def _base_url() -> str:
     return get_settings().zephyr_base_url.rstrip("/")
 
@@ -35,7 +48,14 @@ async def create_test_case(
     labels: list[str] | None = None,
     steps: list[dict] | None = None,
     folder_id: int | None = None,
+    issue_links: list[str] | None = None,
 ) -> dict:
+    """Create a Zephyr test case and optionally link it to Jira issues.
+
+    `issue_links` is a list of Jira issue keys to link to the new test case.
+    Phase 06b passes the source Jira ticket key so the case appears in that
+    ticket's Test Cases panel where Zephyr exposes linked tests.
+    """
     payload: dict[str, Any] = {
         "projectKey": project_key,
         "name": name,
@@ -66,7 +86,34 @@ async def create_test_case(
                     created_test_case=test_case,
                 ) from exc
 
+        if issue_links and test_case.get("key"):
+            try:
+                await _link_to_issues(client, test_case["key"], issue_links)
+            except Exception as exc:
+                key = test_case.get("key", "unknown")
+                raise ZephyrIssueLinkError(
+                    f"Created test case {key}, but failed to link to {issue_links}: {exc}",
+                    created_test_case=test_case,
+                ) from exc
+
         return test_case
+
+
+async def _link_to_issues(
+    client: httpx.AsyncClient,
+    test_case_key: str,
+    issue_keys: list[str],
+) -> None:
+    """Attach Jira issue links to a Zephyr test case.
+
+    Uses Zephyr Scale's `POST /testcases/{key}/links/issues` endpoint with a
+    `{"issueKey": "..."}` payload per call. The route name mirrors the
+    Phase 06b "issueLinks" semantic.
+    """
+    url = f"{_base_url()}/testcases/{test_case_key}/links/issues"
+    for issue_key in issue_keys:
+        resp = await client.post(url, json={"issueKey": issue_key})
+        resp.raise_for_status()
 
 
 async def _add_test_steps(
@@ -102,7 +149,16 @@ async def create_test_cases_bulk(
     project_key: str,
     test_cases: list[dict],
     folder_id: int | None = None,
+    issue_links: list[str] | None = None,
 ) -> dict[str, list[dict]]:
+    """Bulk-create Zephyr test cases.
+
+    Each created case can optionally be linked to a fixed set of Jira issues
+    via `issue_links` (Phase 06b: pass `[source_ticket_key]`). When a single
+    case fails (creation, step upload, or issue linking) the failure is
+    captured in the `failed` list and bulk processing continues so a partial
+    publish can be reported back to the caller.
+    """
     created: list[dict] = []
     failed: list[dict] = []
     for tc in test_cases:
@@ -131,6 +187,7 @@ async def create_test_cases_bulk(
                 labels=tc.get("labels", []),
                 steps=tc.get("steps", []),
                 folder_id=folder_id,
+                issue_links=issue_links,
             )
             created.append(result)
         except ZephyrStepUploadError as exc:
@@ -139,6 +196,18 @@ async def create_test_cases_bulk(
                     "name": name,
                     "error": str(exc),
                     "created_test_case": exc.created_test_case,
+                }
+            )
+        except ZephyrIssueLinkError as exc:
+            # The case was created but the Jira issue link failed. Surface
+            # this as a typed partial failure so the publish service can
+            # report "won't appear on the ticket" honestly.
+            failed.append(
+                {
+                    "name": name,
+                    "error": str(exc),
+                    "created_test_case": exc.created_test_case,
+                    "issue_link_failed": True,
                 }
             )
         except Exception as exc:

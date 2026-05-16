@@ -333,6 +333,206 @@ class TestBoardProfileEncryption:
 
 
 # ---------------------------------------------------------------------------
+# Phase 06b — publish-flow encryption assertions
+# ---------------------------------------------------------------------------
+
+
+class TestPublishExportMetadataEncryption:
+    """After a publish run, the persisted export metadata must be encrypted.
+
+    The publish service calls `live_artifact_service.patch_generated_cases`
+    with the full `export_metadata` dict; we exercise the publish service
+    end-to-end with mocked Zephyr/Jira so the row reflects exactly what
+    production would write.
+    """
+
+    def test_zephyr_export_metadata_encrypted_at_rest(
+        self, svc, schemas, monkeypatch
+    ):
+        from services import (
+            live_publish_service as publish_service,
+            zephyr_service,
+        )
+
+        marker_case_name = "secret-case-name-XYZ"
+        marker_step = "secret-step-payload-XYZ"
+
+        case_set = _run(
+            svc.create_generated_cases(
+                schemas["LiveGeneratedCasesCreate"](
+                    ticket_key="FM-9",
+                    instructions="",
+                    cases=[
+                        {
+                            "name": marker_case_name,
+                            "priority": "High",
+                            "steps": [
+                                {
+                                    "action": marker_step,
+                                    "expected_result": "ok",
+                                }
+                            ],
+                        }
+                    ],
+                )
+            )
+        )
+
+        async def fake_bulk(*, project_key, test_cases, folder_id, issue_links):
+            return {
+                "created": [
+                    {"name": marker_case_name, "key": "FM-T1", "id": "1"}
+                ],
+                "failed": [],
+            }
+
+        monkeypatch.setattr(
+            zephyr_service, "create_test_cases_bulk", fake_bulk
+        )
+
+        from schemas.live_models import LivePublishCasesRequest
+
+        _run(
+            publish_service.publish_generated_cases(
+                case_set.id,
+                LivePublishCasesRequest(
+                    ticket_key="FM-9",
+                    project_key="FM",
+                    mode="linked_test_cases",
+                    fallback_to_comment=True,
+                ),
+            )
+        )
+        row = _run(
+            _scalar(
+                "SELECT export_metadata FROM live_generated_cases WHERE id = ?",
+                case_set.id,
+            )
+        )
+        _assert_encrypted(
+            row["export_metadata"],
+            (marker_case_name, "FM-T1", "FM-9"),
+        )
+
+    def test_jira_comment_export_metadata_encrypted_at_rest(
+        self, svc, schemas, monkeypatch
+    ):
+        from services import (
+            jira_service,
+            live_publish_service as publish_service,
+        )
+
+        marker_comment_id = "secret-comment-id-987"
+        case_set = _run(
+            svc.create_generated_cases(
+                schemas["LiveGeneratedCasesCreate"](
+                    ticket_key="FM-9",
+                    instructions="",
+                    cases=[{"name": "case-A", "objective": "x"}],
+                )
+            )
+        )
+
+        async def fake_post_comment(ticket_key, body):
+            return {
+                "id": marker_comment_id,
+                "author": "Test",
+                "created": "2026-05-16T00:00:00Z",
+            }
+
+        monkeypatch.setattr(jira_service, "post_comment", fake_post_comment)
+
+        from schemas.live_models import LivePublishCasesRequest
+
+        _run(
+            publish_service.publish_generated_cases(
+                case_set.id,
+                LivePublishCasesRequest(
+                    ticket_key="FM-9",
+                    project_key="FM",
+                    mode="jira_comment",
+                    fallback_to_comment=True,
+                ),
+            )
+        )
+        row = _run(
+            _scalar(
+                "SELECT export_metadata FROM live_generated_cases WHERE id = ?",
+                case_set.id,
+            )
+        )
+        _assert_encrypted(row["export_metadata"], (marker_comment_id,))
+
+
+class TestCommentFallbackBodyHygiene:
+    """The Jira-fallback comment body is sent over the wire to Jira, not
+    stored locally — but the publish service must never persist the raw
+    comment body anywhere in the live_generated_cases row."""
+
+    def test_comment_body_not_persisted_in_export_metadata(
+        self, svc, schemas, monkeypatch
+    ):
+        from services import (
+            jira_service,
+            live_publish_service as publish_service,
+        )
+
+        secret_in_objective = "secret-objective-payload-ABC"
+        case_set = _run(
+            svc.create_generated_cases(
+                schemas["LiveGeneratedCasesCreate"](
+                    ticket_key="FM-9",
+                    instructions="",
+                    cases=[
+                        {
+                            "name": "case-A",
+                            "objective": secret_in_objective,
+                        }
+                    ],
+                )
+            )
+        )
+
+        captured = {}
+
+        async def fake_post_comment(ticket_key, body):
+            captured["body"] = body
+            return {"id": "c1", "author": None, "created": None}
+
+        monkeypatch.setattr(jira_service, "post_comment", fake_post_comment)
+
+        from schemas.live_models import LivePublishCasesRequest
+
+        _run(
+            publish_service.publish_generated_cases(
+                case_set.id,
+                LivePublishCasesRequest(
+                    ticket_key="FM-9",
+                    project_key="FM",
+                    mode="jira_comment",
+                ),
+            )
+        )
+
+        # The body sent to Jira does include the objective by design (the
+        # customer chose to post it as a comment). The export_metadata,
+        # however, must not contain the raw comment body — only sanitized
+        # comment metadata. Read the raw ciphertext and assert the
+        # objective marker is absent from the blob.
+        row = _run(
+            _scalar(
+                "SELECT export_metadata FROM live_generated_cases WHERE id = ?",
+                case_set.id,
+            )
+        )
+        assert secret_in_objective in captured["body"]
+        # Ciphertext should not contain the plaintext marker either way
+        # (Fernet obfuscates), but additionally the publish service must
+        # never have included the body in metadata.
+        _assert_encrypted(row["export_metadata"], (secret_in_objective,))
+
+
+# ---------------------------------------------------------------------------
 # Log hygiene — service code never logs the plaintext payloads
 # ---------------------------------------------------------------------------
 

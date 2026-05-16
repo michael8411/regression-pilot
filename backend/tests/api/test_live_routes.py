@@ -277,17 +277,8 @@ class TestGeneratedCasesRoutes:
         assert r.status_code == 404
 
 
-class TestPublishStub:
-    """Phase 06b is not yet shipped — the route must reserve the URL and
-    return 501 so the UI degrades to the comment-fallback path safely.
-
-    When Phase 06b lands, replace this with the success-path coverage in
-    `test_live_publish_routes.py`."""
-
-    def test_publish_returns_501(self, live_client):
-        r = live_client.post("/live/generated-cases/anything/publish")
-        assert r.status_code == 501
-        assert "Phase 06b" in r.json().get("detail", "")
+# Publish-to-Jira route is exercised in `test_live_publish_routes.py`
+# (Phase 06b). The Phase 01 501 stub no longer exists.
 
 
 class TestActivityRoutes:

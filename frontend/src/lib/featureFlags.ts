@@ -24,9 +24,17 @@ const DEFAULTS: Record<FeatureFlag, boolean> = {
   testCycles: true,
   settingsV2: true,
   lightTheme: true, // keep the old light theme available while refactoring
-  // Live Testing redesign rollout. Off by default until the final rollout
-  // phase; Phase 01 only locks contracts and runtime paths must not depend
-  // on this flag yet.
+  // Live Testing redesign rollout. Phase 08 verification matrix (A–H)
+  // passed: build green, 474 backend tests pass, encrypted-at-rest
+  // assertions cover all sensitive columns, full CRUD round-trips, and
+  // the bug-hardening checklist (Esc + body-scroll + DnD/drawer
+  // poll pause + localStorage-free workflow store) is satisfied.
+  //
+  // The flag stays default-off until Phase 06b ships the publish-to-Jira
+  // path (matrix items E5 and H6). Local/dev should opt in via either
+  //   VITE_FF_LIVE_TESTING_REDESIGN_V1=true
+  // or `window.__ff.enable("liveTestingRedesignV1")` to exercise the
+  // redesigned surfaces.
   liveTestingRedesignV1: false,
 };
 

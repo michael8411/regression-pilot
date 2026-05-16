@@ -35,7 +35,7 @@ export function GenerationSkeletonList({ count }: Props) {
               right: 0,
               height: CARD_TOP_ACCENT_HEIGHT_PX,
               background: "var(--ai)",
-              borderRadius: "var(--radius-lg, 10px) var(--radius-lg, 10px) 0 0",
+              pointerEvents: "none",
             }}
           />
 

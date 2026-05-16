@@ -100,7 +100,7 @@ export function TicketCard({
       }}
       style={{ transform: CSS.Translate.toString(transform) }}
       className={clsx(
-        "group relative flex flex-col rounded-lg border cursor-grab",
+        "group relative flex flex-col overflow-hidden rounded-lg border cursor-grab",
         "bg-surface-elevated border-subtle hover:border-accent/[0.25]",
         "active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
         tokens.padding,

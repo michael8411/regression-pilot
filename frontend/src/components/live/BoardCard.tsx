@@ -73,7 +73,7 @@ export function BoardCard({
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       className={clsx(
-        "group relative flex flex-col gap-2.5 rounded-xl px-3.5 pt-4 pb-3 cursor-pointer",
+        "group relative flex flex-col gap-2.5 overflow-hidden rounded-xl px-3.5 pt-4 pb-3 cursor-pointer",
         "border border-subtle bg-surface-elevated hover:border-accent/[0.25] transition-colors",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
         hover && "shadow-md",
@@ -83,7 +83,7 @@ export function BoardCard({
       <CardTopAccent tone="testing" />
 
       {/* Card header: brand tile + name + actions */}
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex gap-2 justify-between items-start">
         <div className="flex items-start gap-2.5 min-w-0">
           <BrandTile projectKey={projectKey} size={34} />
           <div className="min-w-0">
@@ -141,7 +141,7 @@ export function BoardCard({
         <>
           {/* Funnel bar */}
           <div>
-            <div className="flex items-center justify-between mb-1">
+            <div className="flex justify-between items-center mb-1">
               <span className="text-[9px] font-mono uppercase tracking-wider text-ink-muted">
                 QA Funnel
               </span>
@@ -162,7 +162,7 @@ export function BoardCard({
           </div>
 
           {/* Throughput + aging risk */}
-          <div className="flex items-end justify-between gap-2">
+          <div className="flex gap-2 justify-between items-end">
             <div>
               <div className="text-[9px] font-mono uppercase tracking-wider text-ink-muted mb-1">
                 7-day closed
@@ -192,7 +192,7 @@ function FunnelLegend({
 }) {
   return (
     <span className="flex items-center gap-0.5">
-      <span className={`text-[10px] font-semibold font-mono ${color}`}>{count}</span>
+      <span className={`font-mono font-semibold text-[10px] ${color}`}>{count}</span>
       <span className="text-[9px] text-ink-faint">{label}</span>
     </span>
   );
@@ -201,7 +201,7 @@ function FunnelLegend({
 function MetricsSkeleton() {
   return (
     <div className="flex flex-col gap-2 animate-pulse">
-      <div className="h-2 rounded-full bg-surface-overlay w-full" />
+      <div className="w-full h-2 rounded-full bg-surface-overlay" />
       <div className="flex gap-1">
         {Array.from({ length: 7 }, (_, i) => (
           <div

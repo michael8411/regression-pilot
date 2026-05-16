@@ -2,7 +2,9 @@
  * Phase 04 — card top accent strip.
  *
  * Absolutely positioned 2px bar inside every Live Testing card surface.
- * Sits flush with the card's top-left/top-right corners.
+ * The parent card must use `overflow-hidden` + the same `rounded-*` as the
+ * visual outline so this rectangular strip is clipped to curved corners (do
+ * not set border-radius on this span — 2px height fights large radii).
  * Callers pass a `tone` (qa bucket) and optionally `varOverride` for non-bucket cases.
  *
  * Rule (locked in 00b):
@@ -33,7 +35,6 @@ export function CardTopAccent({ tone = "testing", varOverride }: Props) {
         right: 0,
         height: CARD_TOP_ACCENT_HEIGHT_PX,
         background: color,
-        borderRadius: "var(--radius-lg, 10px) var(--radius-lg, 10px) 0 0",
         pointerEvents: "none",
       }}
     />

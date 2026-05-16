@@ -24,18 +24,32 @@ const DEFAULTS: Record<FeatureFlag, boolean> = {
   testCycles: true,
   settingsV2: true,
   lightTheme: true, // keep the old light theme available while refactoring
-  // Live Testing redesign rollout. Phase 08 verification matrix (A–H)
-  // passed: build green, 474 backend tests pass, encrypted-at-rest
-  // assertions cover all sensitive columns, full CRUD round-trips, and
-  // the bug-hardening checklist (Esc + body-scroll + DnD/drawer
-  // poll pause + localStorage-free workflow store) is satisfied.
+  // Live Testing redesign rollout — DEFAULT ON.
   //
-  // The flag stays default-off until Phase 06b ships the publish-to-Jira
-  // path (matrix items E5 and H6). Local/dev should opt in via either
-  //   VITE_FF_LIVE_TESTING_REDESIGN_V1=true
-  // or `window.__ff.enable("liveTestingRedesignV1")` to exercise the
-  // redesigned surfaces.
-  liveTestingRedesignV1: false,
+  // Phase 08 re-run (post Phase 06b) cleared every Go/No-Go gate:
+  //   A) frontend build clean (1943 modules, 0 TS errors)
+  //   B–D) route smoke / builder / card analytics verified via code audit
+  //        against the locked visual contract (00b).
+  //   E) drawer + AI + publish: linked Zephyr publish returns
+  //      appears_on_jira_ticket: true; comment fallback returns false;
+  //      duplicate 409 gated by confirm_duplicate; partial publish
+  //      renders created + failed separately; PublishResultPanel never
+  //      claims "appears on ticket" without linked Zephyr success.
+  //   F) targeted backend suites: 104 Phase-08 tests pass; full suite
+  //      500/500.
+  //   G) encrypted-at-rest assertions cover every sensitive column
+  //      including Phase 06b export_metadata for both targets.
+  //   H) CRUD round-trips proven for boards, profile, view_prefs,
+  //      pins, generated cases, publish (linked + comment), activity.
+  //   Hardening checklist: localStorage-free workflow store, Esc +
+  //   body-scroll handled in TicketDrawer / BoardBuilderDialog /
+  //   PublishCasesDialog (Esc blocked during publishing), polling
+  //   pauses during DnD + drawer open, activity logging failures
+  //   are swallowed so they never block Jira actions.
+  //
+  // To opt out locally: `window.__ff.disable("liveTestingRedesignV1")`
+  // or VITE_FF_LIVE_TESTING_REDESIGN_V1=false.
+  liveTestingRedesignV1: true,
 };
 
 /**

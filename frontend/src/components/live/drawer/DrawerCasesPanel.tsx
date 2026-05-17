@@ -1,14 +1,16 @@
 /**
- * Phase 06 — drawer Test Cases panel backed by encrypted SQLite drafts.
+ * Phase 06 / 06c — drawer Test Cases panel backed by encrypted SQLite drafts.
  *
  * Reads `/live/generated-cases?ticket_key=...` via `useLiveGeneratedCases`.
  * Each draft renders as a collapsible card group, with a delete affordance
- * per draft. Empty state still falls back to a "Open AI tab" CTA.
+ * per draft. Empty state falls back to a "Open AI tab" CTA.
  *
  * Phase 06b — adds the publish-to-Jira workflow per draft. The "Publish"
- * action opens `PublishCasesDialog`; the status chip + target/export-key
- * summary lives directly in the header so customers can see whether a
- * draft has already been published and where it landed.
+ * action opens `PublishCasesDialog`.
+ *
+ * Phase 06c — cases inside a draft are editable (`EditableGeneratedCaseCard`
+ * + `GeneratedCaseEditorDialog`) and the export-target copy is target-
+ * accurate (no "appears on ticket" promise on the comment path).
  */
 
 import { useMemo, useState } from "react";
@@ -26,7 +28,8 @@ import {
   Trash2,
 } from "@/lib/icons";
 import { useLiveGeneratedCases } from "../hooks/useLiveGeneratedCases";
-import { GeneratedTestCaseCard } from "../GeneratedTestCaseCard";
+import { EditableGeneratedCaseCard } from "./EditableGeneratedCaseCard";
+import { GeneratedCaseEditorDialog } from "./GeneratedCaseEditorDialog";
 import { PublishCasesDialog } from "./PublishCasesDialog";
 import type { TestCase } from "@/types";
 import type {
@@ -62,11 +65,16 @@ function deriveProjectKey(ticketKey: string): string {
 }
 
 export function DrawerCasesPanel({ ticketKey, onGoToAi }: Props) {
-  const { drafts, loading, error, remove, refresh } =
+  const { drafts, loading, error, remove, refresh, patchCase } =
     useLiveGeneratedCases(ticketKey);
   const [publishTarget, setPublishTarget] = useState<LiveGeneratedCases | null>(
     null,
   );
+  const [editTarget, setEditTarget] = useState<{
+    draftId: string;
+    index: number;
+    testCase: TestCase;
+  } | null>(null);
   const projectKey = useMemo(
     () => deriveProjectKey(ticketKey),
     [ticketKey],
@@ -142,6 +150,9 @@ export function DrawerCasesPanel({ ticketKey, onGoToAi }: Props) {
           ticketKey={ticketKey}
           onDelete={() => void remove(draft.id).catch(() => undefined)}
           onPublish={() => setPublishTarget(draft)}
+          onEditCase={(index, tc) =>
+            setEditTarget({ draftId: draft.id, index, testCase: tc })
+          }
         />
       ))}
       {publishTarget && (
@@ -153,6 +164,20 @@ export function DrawerCasesPanel({ ticketKey, onGoToAi }: Props) {
           onPublished={() => void refresh()}
         />
       )}
+      {editTarget && (
+        <GeneratedCaseEditorDialog
+          testCase={editTarget.testCase}
+          index={editTarget.index}
+          onClose={() => setEditTarget(null)}
+          onSave={async (next) => {
+            await patchCase(
+              editTarget.draftId,
+              editTarget.index,
+              next as unknown as Record<string, unknown>,
+            );
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -162,6 +187,7 @@ interface DraftGroupProps {
   ticketKey: string;
   onDelete: () => void;
   onPublish: () => void;
+  onEditCase: (index: number, testCase: TestCase) => void;
 }
 
 function DraftGroup({
@@ -169,6 +195,7 @@ function DraftGroup({
   ticketKey,
   onDelete,
   onPublish,
+  onEditCase,
 }: DraftGroupProps) {
   const [open, setOpen] = useState(true);
   const cases = (draft.cases as TestCase[] | null) ?? [];
@@ -248,7 +275,11 @@ function DraftGroup({
             <ul className="flex flex-col gap-2">
               {cases.map((tc, i) => (
                 <li key={i}>
-                  <GeneratedTestCaseCard testCase={tc} index={i} />
+                  <EditableGeneratedCaseCard
+                    testCase={tc}
+                    index={i}
+                    onEdit={() => onEditCase(i, tc)}
+                  />
                 </li>
               ))}
             </ul>
@@ -300,11 +331,19 @@ function TargetBadge({
       </span>
     );
   }
+  if (meta.target === "jira_test_cases_field") {
+    return (
+      <span className="text-[9px] font-mono uppercase tracking-wider text-ok inline-flex items-center gap-1">
+        <CheckCircle2 size={9} />
+        Test Cases field
+      </span>
+    );
+  }
   if (meta.target === "zephyr_linked_tests") {
     return (
       <span className="text-[9px] font-mono uppercase tracking-wider text-ok inline-flex items-center gap-1">
         <CheckCircle2 size={9} />
-        Jira ticket
+        Linked tests
       </span>
     );
   }
@@ -312,7 +351,7 @@ function TargetBadge({
     return (
       <span className="text-[9px] font-mono uppercase tracking-wider text-info inline-flex items-center gap-1">
         <MessageSquare size={9} />
-        Comment fallback
+        Jira comment
       </span>
     );
   }
@@ -338,16 +377,30 @@ function ExportMetadataSummary({
 }) {
   const created = meta.created_test_cases ?? [];
   const failed = meta.failed ?? [];
+  const isField = meta.target === "jira_test_cases_field";
   const isLinked = meta.target === "zephyr_linked_tests";
   const isComment = meta.target === "jira_comment";
 
   return (
     <div className="px-3 py-2 border-b border-subtle bg-surface-overlay/30 flex flex-col gap-1.5">
+      {isField && (
+        <p className="text-[10.5px] text-ok flex items-center gap-1.5">
+          <CheckCircle2 size={10} />
+          Posted to <span className="font-mono">{ticketKey}</span> Test
+          Cases field
+          {meta.jira_field?.field_id && (
+            <span className="text-ink-faint font-mono">
+              ({meta.jira_field.field_id})
+            </span>
+          )}
+          .
+        </p>
+      )}
       {isLinked && meta.appears_on_jira_ticket && (
         <p className="text-[10.5px] text-ok flex items-center gap-1.5">
           <CheckCircle2 size={10} />
-          Linked to <span className="font-mono">{ticketKey}</span> — should
-          appear in the Jira Test Cases panel.
+          Linked to <span className="font-mono">{ticketKey}</span> — appears
+          in the Jira Test Cases panel.
         </p>
       )}
       {isLinked && !meta.appears_on_jira_ticket && (
@@ -360,7 +413,9 @@ function ExportMetadataSummary({
       {isComment && (
         <p className="text-[10.5px] text-info flex items-center gap-1.5">
           <MessageSquare size={10} />
-          Posted as Jira comment. May not appear in the Test Cases panel.
+          Posted as Jira comment fallback on{" "}
+          <span className="font-mono">{ticketKey}</span>. The Test Cases
+          field was not updated.
         </p>
       )}
       {status === "draft" && meta.target === "none" && (

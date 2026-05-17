@@ -43,6 +43,16 @@ export interface UseLiveGeneratedCasesResult {
     id: string,
     args: PatchGeneratedCasesArgs,
   ) => Promise<LiveGeneratedCases | null>;
+  /**
+   * Phase 06c — surgical per-case patch. Sends `case_updates` so the
+   * backend replaces only the targeted case index, leaving sibling
+   * cases and `export_metadata` untouched.
+   */
+  patchCase: (
+    id: string,
+    index: number,
+    nextCase: Record<string, unknown>,
+  ) => Promise<LiveGeneratedCases | null>;
 }
 
 export function useLiveGeneratedCases(
@@ -151,5 +161,31 @@ export function useLiveGeneratedCases(
     [],
   );
 
-  return { drafts, loading, error, refresh, save, remove, patch };
+  const patchCase = useCallback(
+    async (
+      id: string,
+      index: number,
+      nextCase: Record<string, unknown>,
+    ): Promise<LiveGeneratedCases | null> => {
+      try {
+        const updated = await api.patchLiveGeneratedCases(id, {
+          case_updates: [{ index, case: nextCase }],
+        });
+        if (mounted.current) {
+          setDrafts((prev) =>
+            prev.map((d) => (d.id === updated.id ? updated : d)),
+          );
+        }
+        return updated;
+      } catch (e: any) {
+        if (mounted.current) {
+          setError(e?.message ?? "Failed to save case");
+        }
+        return null;
+      }
+    },
+    [],
+  );
+
+  return { drafts, loading, error, refresh, save, remove, patch, patchCase };
 }

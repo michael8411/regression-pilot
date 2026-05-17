@@ -8,6 +8,7 @@ import type {
   LiveBoard,
   LiveBoardProfile,
   LiveBoardViewPreferences,
+  LiveCaseUpdateEntry,
   LiveGeneratedCases,
   LiveGeneratedCasesStatus,
   LivePinnedTicket,
@@ -214,6 +215,12 @@ export function createLiveGeneratedCases(
 export interface PatchLiveGeneratedCasesBody {
   instructions?: string;
   cases?: unknown[];
+  /**
+   * Phase 06c — surgical per-case replacement. Use this instead of the
+   * full `cases` field when editing a single case so siblings can never
+   * be clobbered by a stale-read full-list overwrite.
+   */
+  case_updates?: LiveCaseUpdateEntry[];
   context_metadata?: Record<string, unknown> | null;
   export_metadata?: Record<string, unknown> | null;
   status?: LiveGeneratedCasesStatus;

@@ -150,10 +150,21 @@ export type LiveGeneratedCasesStatus =
 // Live publish-to-Jira contracts (Phase 06b)
 // =============================================================================
 
-export type LivePublishMode = "linked_test_cases" | "jira_comment";
-export type LivePublishTarget =
-  | "zephyr_linked_tests"
+/**
+ * Phase 06c — Live publishes default to the Jira ticket's `Test Cases`
+ * custom field. Comment publishing is the optional fallback. The legacy
+ * `linked_test_cases` mode stays in the union so historical drafts keep
+ * deserializing without crashes; it is no longer surfaced in the UI.
+ */
+export type LivePublishMode =
+  | "jira_test_cases_field"
   | "jira_comment"
+  | "linked_test_cases";
+
+export type LivePublishTarget =
+  | "jira_test_cases_field"
+  | "jira_comment"
+  | "zephyr_linked_tests"
   | "none";
 
 export interface LivePublishCasesRequest {
@@ -161,11 +172,31 @@ export interface LivePublishCasesRequest {
   project_key: string;
   /** When undefined or empty, publish all cases in the set. */
   case_indexes?: number[] | null;
+  /** Live default = `jira_test_cases_field`. */
   mode: LivePublishMode;
+  /** When the primary field write fails, fall back to a Jira comment. */
   fallback_to_comment: boolean;
   folder_id?: number | null;
   /** Required for re-publish after status is exported/partial_export/commented. */
   confirm_duplicate?: boolean;
+  /**
+   * Phase 06c — preformatted Jira-friendly body. The dialog renders the
+   * preview via `lib/jiraCommentFormatter.ts` and sends that exact string
+   * here so the preview and the posted text are identical byte-for-byte.
+   * Used for both the field-write target and the comment target.
+   */
+  body?: string | null;
+  /** Override the target Jira custom field id when posting to the field. */
+  test_cases_field_id?: string;
+}
+
+/**
+ * Phase 06c — surgical per-case update payload used by the case editor so
+ * saving one case never overwrites its siblings.
+ */
+export interface LiveCaseUpdateEntry {
+  index: number;
+  case: Record<string, unknown>;
 }
 
 export interface LiveCreatedTestCase {
@@ -188,6 +219,12 @@ export interface LiveJiraCommentResult {
   url?: string | null;
 }
 
+export interface LiveJiraFieldResult {
+  field_id: string;
+  ticket_key: string;
+  updated_at?: string | null;
+}
+
 export interface LivePublishCasesResponse {
   status: LiveGeneratedCasesStatus;
   target: LivePublishTarget;
@@ -195,6 +232,7 @@ export interface LivePublishCasesResponse {
   created_test_cases: LiveCreatedTestCase[];
   failed: LiveFailedPublishCase[];
   jira_comment: LiveJiraCommentResult | null;
+  jira_field?: LiveJiraFieldResult | null;
   appears_on_jira_ticket: boolean;
   duplicate_attempt: boolean;
   message?: string | null;
@@ -209,6 +247,7 @@ export interface LiveExportMetadata {
   created_test_cases: LiveCreatedTestCase[];
   failed: LiveFailedPublishCase[];
   jira_comment: LiveJiraCommentResult | null;
+  jira_field?: LiveJiraFieldResult | null;
   appears_on_jira_ticket: boolean;
   published_at: string;
   duplicate_attempt: boolean;

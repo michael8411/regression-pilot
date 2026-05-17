@@ -34,6 +34,7 @@ try:
         LiveFailedPublishCase,
         LiveGeneratedCasesPatch,
         LiveJiraCommentResult,
+        LiveJiraFieldResult,
         LivePublishCasesRequest,
         LivePublishCasesResponse,
     )
@@ -49,6 +50,7 @@ except ImportError:  # pragma: no cover - supports running from backend/ as scri
         LiveFailedPublishCase,
         LiveGeneratedCasesPatch,
         LiveJiraCommentResult,
+        LiveJiraFieldResult,
         LivePublishCasesRequest,
         LivePublishCasesResponse,
     )
@@ -139,7 +141,13 @@ def _format_comment_body(
     cases: list[dict],
     set_id: str,
 ) -> str:
-    """Build the structured Jira comment fallback body.
+    """Build the structured Jira comment body for posted test cases.
+
+    The output is intended for Jira's rich-text comment surface and should
+    stay byte-identical to the frontend preview produced by
+    `frontend/src/components/live/lib/jiraCommentFormatter.ts`. When the
+    two formatters drift, update both — see that file for the canonical
+    rules.
 
     Plaintext is fine here — the Jira API call already trusts the customer's
     Jira instance with this content; nothing extra is leaked relative to
@@ -148,46 +156,55 @@ def _format_comment_body(
     lines: list[str] = []
     lines.append("Testdeck generated test cases")
     lines.append("")
-    lines.append(
-        "These cases were posted as a Jira comment because linked test-case "
-        "publishing was unavailable. They may not appear in the Jira "
-        "Test Cases panel."
-    )
-    lines.append("")
     lines.append(f"Source ticket: {ticket_key}")
-    lines.append(f"Source generated case set: {set_id}")
     lines.append("")
     for i, tc in enumerate(cases, start=1):
-        lines.append(f"--- Case {i}: {tc.get('name', 'Untitled')} ---")
-        if tc.get("priority"):
-            lines.append(f"Priority: {tc['priority']}")
-        if tc.get("objective"):
-            lines.append(f"Objective: {tc['objective']}")
+        name = str(tc.get("name") or "Untitled").strip() or "Untitled"
+        priority = str(tc.get("priority") or "").strip()
+        header = f"Case {i}: {name}"
+        if priority:
+            header = f"{header}  [{priority}]"
+        lines.append(header)
+        objective = str(tc.get("objective") or "").strip()
+        if objective:
+            lines.append(f"Objective: {objective}")
         precs = tc.get("preconditions")
-        if precs:
-            if isinstance(precs, list):
-                lines.append("Preconditions:")
-                for p in precs:
-                    lines.append(f"  - {p}")
-            else:
-                lines.append(f"Preconditions: {precs}")
+        prec_items: list[str] = []
+        if isinstance(precs, list):
+            prec_items = [str(p).strip() for p in precs if str(p).strip()]
+        elif precs:
+            prec_items = [str(precs).strip()]
+        if prec_items:
+            lines.append("Preconditions:")
+            for p in prec_items:
+                lines.append(f"  - {p}")
         steps = tc.get("steps") or []
         if steps:
             lines.append("Steps:")
             for j, step in enumerate(steps, start=1):
                 if isinstance(step, dict):
-                    action = step.get("action") or step.get("description") or ""
-                    expected = step.get("expected_result") or step.get(
-                        "expectedResult"
-                    ) or ""
-                    lines.append(f"  {j}. {action}")
+                    action = str(
+                        step.get("action")
+                        or step.get("description")
+                        or ""
+                    ).strip()
+                    expected = str(
+                        step.get("expected_result")
+                        or step.get("expectedResult")
+                        or ""
+                    ).strip()
+                    lines.append(f"  {j}. {action}" if action else f"  {j}.")
                     if expected:
                         lines.append(f"     Expected: {expected}")
                 else:
                     lines.append(f"  {j}. {step}")
         expected_top = tc.get("expected_result") or tc.get("expectedResult")
         if expected_top:
-            lines.append(f"Expected result: {expected_top}")
+            lines.append(f"Expected result: {str(expected_top).strip()}")
+        # Blank line + separator between cases (omit after the final case).
+        if i < len(cases):
+            lines.append("")
+            lines.append("----")
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
@@ -274,7 +291,27 @@ async def publish_generated_cases(
         duplicate_attempt=duplicate_attempt,
     )
 
+    # Body shared by both Jira targets — frontend may supply a preformatted
+    # version so the preview matches the posted text byte-for-byte. Preserve
+    # trailing whitespace (the formatter ends with a newline by design); only
+    # treat all-whitespace strings as "no override".
+    body_override = request.body if (request.body or "").strip() else None
+
     # ---- Branch on mode ----------------------------------------------------
+
+    if request.mode == "jira_test_cases_field":
+        return await _publish_via_test_cases_field(
+            case_set_id=case_set_id,
+            ticket_key=ticket_key,
+            project_key=project_key,
+            selected=selected,
+            indexes=indexes,
+            duplicate_attempt=duplicate_attempt,
+            now=now,
+            field_id=request.test_cases_field_id,
+            body_override=body_override,
+            fallback_to_comment=request.fallback_to_comment,
+        )
 
     if request.mode == "jira_comment":
         # Customer explicitly chose the comment path; skip Zephyr entirely.
@@ -286,9 +323,10 @@ async def publish_generated_cases(
             indexes=indexes,
             duplicate_attempt=duplicate_attempt,
             now=now,
+            comment_body_override=body_override,
         )
 
-    # ---- Primary path: Zephyr linked test cases ----------------------------
+    # ---- Legacy: Zephyr linked test cases (back-compat opt-in) -------------
 
     try:
         bulk = await zephyr_service.create_test_cases_bulk(
@@ -421,6 +459,111 @@ async def publish_generated_cases(
 
 
 # ---------------------------------------------------------------------------
+# Primary path — write into the Jira ticket's Test Cases custom field
+# ---------------------------------------------------------------------------
+
+
+async def _publish_via_test_cases_field(
+    *,
+    case_set_id: str,
+    ticket_key: str,
+    project_key: str,
+    selected: list[dict],
+    indexes: list[int],
+    duplicate_attempt: bool,
+    now: str,
+    field_id: str,
+    body_override: Optional[str],
+    fallback_to_comment: bool,
+) -> LivePublishCasesResponse:
+    body = body_override or _format_comment_body(
+        ticket_key=ticket_key, cases=selected, set_id=case_set_id
+    )
+    try:
+        field_meta = await jira_service.set_test_cases_field(
+            ticket_key, body, field_id=field_id
+        )
+    except Exception as exc:
+        logger.warning(
+            "live_publish_jira_field_failed",
+            case_set_id=case_set_id,
+            ticket_key=ticket_key,
+            field_id=field_id,
+            error=str(exc)[:200],
+        )
+        if fallback_to_comment:
+            return await _publish_via_comment(
+                case_set_id=case_set_id,
+                ticket_key=ticket_key,
+                project_key=project_key,
+                selected=selected,
+                indexes=indexes,
+                duplicate_attempt=duplicate_attempt,
+                now=now,
+                fallback_reason=f"Field write failed: {str(exc)[:160]}",
+                comment_body_override=body_override,
+            )
+        return await _record_total_failure(
+            case_set_id=case_set_id,
+            ticket_key=ticket_key,
+            project_key=project_key,
+            indexes=indexes,
+            selected_names=[c.get("name", "Untitled") for c in selected],
+            error=f"Jira field write failed: {str(exc)[:160]}",
+            duplicate_attempt=duplicate_attempt,
+            now=now,
+        )
+
+    field_model = LiveJiraFieldResult(
+        field_id=str(field_meta.get("field_id") or field_id),
+        ticket_key=str(field_meta.get("ticket_key") or ticket_key),
+        updated_at=field_meta.get("updated_at"),
+    )
+
+    metadata = LiveExportMetadata(
+        target="jira_test_cases_field",
+        source_ticket_key=ticket_key,
+        project_key=project_key,
+        selected_case_indexes=indexes,
+        created_test_cases=[],
+        failed=[],
+        jira_comment=None,
+        jira_field=field_model,
+        appears_on_jira_ticket=True,
+        published_at=now,
+        duplicate_attempt=duplicate_attempt,
+    )
+    await _persist_export(
+        case_set_id=case_set_id,
+        status="exported",
+        export_metadata=metadata,
+        exported_at=now,
+    )
+
+    logger.info(
+        "live_publish_jira_field_completed",
+        case_set_id=case_set_id,
+        ticket_key=ticket_key,
+        field_id=field_model.field_id,
+        case_count=len(selected),
+    )
+
+    return LivePublishCasesResponse(
+        status="exported",
+        target="jira_test_cases_field",
+        created=len(selected),
+        created_test_cases=[],
+        failed=[],
+        jira_comment=None,
+        jira_field=field_model,
+        appears_on_jira_ticket=True,
+        duplicate_attempt=duplicate_attempt,
+        message=f"Posted to Jira Test Cases field on {ticket_key}.",
+        exported_at=now,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Helpers — comment fallback + total-failure paths
 # ---------------------------------------------------------------------------
 
@@ -436,10 +579,18 @@ async def _publish_via_comment(
     now: str,
     fallback_reason: Optional[str] = None,
     prior_failed: Optional[list[LiveFailedPublishCase]] = None,
+    comment_body_override: Optional[str] = None,
 ) -> LivePublishCasesResponse:
-    body = _format_comment_body(
-        ticket_key=ticket_key, cases=selected, set_id=case_set_id
-    )
+    # When the frontend supplied a preformatted body (so the preview and
+    # the posted comment stay identical), prefer it. Otherwise fall back
+    # to the backend formatter, which serves non-frontend callers and
+    # the implicit Zephyr-failure fallback path.
+    if comment_body_override and comment_body_override.strip():
+        body = comment_body_override
+    else:
+        body = _format_comment_body(
+            ticket_key=ticket_key, cases=selected, set_id=case_set_id
+        )
     try:
         comment = await jira_service.post_comment(ticket_key, body)
     except Exception as exc:
@@ -508,7 +659,7 @@ async def _publish_via_comment(
         appears_on_jira_ticket=False,
         duplicate_attempt=duplicate_attempt,
         message=(
-            "Posted as a Jira comment. The cases may not appear in the "
+            "Posted as Jira comment. The cases may not appear in the "
             "Jira Test Cases panel."
         ),
         exported_at=now,

@@ -292,3 +292,152 @@ class TestStubRemoved:
             json=_publish_body(case_indexes=[999]),
         )
         assert r.status_code != 501
+
+
+# ---------------------------------------------------------------------------
+# Phase 06c — Live publish defaults to Jira comment
+# ---------------------------------------------------------------------------
+
+
+class TestPhase06cFieldDefault:
+
+    def test_request_without_mode_writes_to_test_cases_field(
+        self, live_client, monkeypatch
+    ):
+        import services.jira_service as jira
+        import services.zephyr_service as zephyr
+
+        captured = {}
+
+        async def fake_field(ticket_key, body, field_id="customfield_11001"):
+            captured["ticket_key"] = ticket_key
+            captured["body"] = body
+            captured["field_id"] = field_id
+            return {
+                "field_id": field_id,
+                "ticket_key": ticket_key,
+                "updated_at": "2026-05-17T12:00:00Z",
+            }
+
+        async def fake_comment(*_, **__):
+            raise AssertionError("default publish must not post a comment")
+
+        async def fake_bulk(**_):
+            raise AssertionError("default publish must not touch Zephyr")
+
+        monkeypatch.setattr(jira, "set_test_cases_field", fake_field)
+        monkeypatch.setattr(jira, "post_comment", fake_comment)
+        monkeypatch.setattr(zephyr, "create_test_cases_bulk", fake_bulk)
+
+        cid = _seed(live_client)
+        body = {"ticket_key": "FM-9", "project_key": "FM"}
+        r = live_client.post(
+            f"/live/generated-cases/{cid}/publish", json=body
+        )
+        assert r.status_code == 200, r.text
+        payload = r.json()
+        assert payload["status"] == "exported"
+        assert payload["target"] == "jira_test_cases_field"
+        assert payload["appears_on_jira_ticket"] is True
+        assert payload["jira_field"]["field_id"] == "customfield_11001"
+        assert captured["field_id"] == "customfield_11001"
+        assert "Testdeck generated test cases" in captured["body"]
+
+    def test_field_failure_falls_back_to_comment(
+        self, live_client, monkeypatch
+    ):
+        import services.jira_service as jira
+
+        async def boom(*_, **__):
+            raise RuntimeError("jira 500 on field edit")
+
+        async def fake_comment(ticket_key, body):
+            return {"id": "c-fb", "author": None, "created": None}
+
+        monkeypatch.setattr(jira, "set_test_cases_field", boom)
+        monkeypatch.setattr(jira, "post_comment", fake_comment)
+
+        cid = _seed(live_client)
+        r = live_client.post(
+            f"/live/generated-cases/{cid}/publish",
+            json={"ticket_key": "FM-9", "project_key": "FM"},
+        )
+        assert r.status_code == 200
+        payload = r.json()
+        assert payload["target"] == "jira_comment"
+        assert payload["status"] == "commented"
+
+
+class TestPhase06cBodyOverride:
+
+    def test_body_override_used_for_field_write(
+        self, live_client, monkeypatch
+    ):
+        import services.jira_service as jira
+
+        captured = {}
+
+        async def fake_field(ticket_key, body, field_id="customfield_11001"):
+            captured["body"] = body
+            return {
+                "field_id": field_id,
+                "ticket_key": ticket_key,
+                "updated_at": None,
+            }
+
+        monkeypatch.setattr(jira, "set_test_cases_field", fake_field)
+
+        cid = _seed(live_client)
+        override = "Frontend-rendered preview body, used verbatim.\n"
+        r = live_client.post(
+            f"/live/generated-cases/{cid}/publish",
+            json=_publish_body(
+                mode="jira_test_cases_field", body=override
+            ),
+        )
+        assert r.status_code == 200
+        assert captured["body"] == override
+
+
+# ---------------------------------------------------------------------------
+# Phase 06c — per-case partial updates via PATCH
+# ---------------------------------------------------------------------------
+
+
+class TestPhase06cCaseUpdatesEndpoint:
+
+    def test_patch_with_case_updates_replaces_one_case(self, live_client):
+        cid = _seed(live_client)
+        r = live_client.patch(
+            f"/live/generated-cases/{cid}",
+            json={
+                "case_updates": [
+                    {
+                        "index": 0,
+                        "case": {
+                            "name": "Happy (edited)",
+                            "priority": "Critical",
+                            "objective": "main + audit",
+                        },
+                    }
+                ]
+            },
+        )
+        assert r.status_code == 200, r.text
+        cases = r.json()["cases"]
+        assert cases[0]["name"] == "Happy (edited)"
+        assert cases[1]["name"] == "Edge"
+
+    def test_patch_with_case_updates_out_of_range_returns_400(
+        self, live_client
+    ):
+        cid = _seed(live_client)
+        r = live_client.patch(
+            f"/live/generated-cases/{cid}",
+            json={
+                "case_updates": [
+                    {"index": 99, "case": {"name": "nope"}}
+                ]
+            },
+        )
+        assert r.status_code == 400

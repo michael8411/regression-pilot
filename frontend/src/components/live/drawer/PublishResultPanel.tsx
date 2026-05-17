@@ -26,6 +26,7 @@ import type {
   LivePublishCasesResponse,
   LiveCreatedTestCase,
   LiveFailedPublishCase,
+  LiveJiraFieldResult,
 } from "@/types/live";
 
 interface Props {
@@ -36,6 +37,9 @@ interface Props {
 }
 
 export function PublishResultPanel({ ticketKey, result, onClose }: Props) {
+  const isFieldSuccess =
+    result.status === "exported" &&
+    result.target === "jira_test_cases_field";
   const isLinkedSuccess =
     result.status === "exported" &&
     result.target === "zephyr_linked_tests" &&
@@ -43,7 +47,7 @@ export function PublishResultPanel({ ticketKey, result, onClose }: Props) {
   const isPartial = result.status === "partial_export";
   const isCommented = result.status === "commented";
   const isTotalFailure =
-    !isLinkedSuccess && !isPartial && !isCommented; // i.e. draft preserved
+    !isFieldSuccess && !isLinkedSuccess && !isPartial && !isCommented;
 
   return (
     <section
@@ -52,6 +56,7 @@ export function PublishResultPanel({ ticketKey, result, onClose }: Props) {
       className="flex flex-col gap-3 rounded-lg border border-subtle bg-surface-elevated p-4"
     >
       <Header
+        isFieldSuccess={isFieldSuccess}
         isLinkedSuccess={isLinkedSuccess}
         isPartial={isPartial}
         isCommented={isCommented}
@@ -59,7 +64,7 @@ export function PublishResultPanel({ ticketKey, result, onClose }: Props) {
         ticketKey={ticketKey}
       />
 
-      {result.message && !isLinkedSuccess && (
+      {result.message && !isFieldSuccess && !isLinkedSuccess && (
         <p
           className={clsx(
             "text-[11.5px] leading-relaxed",
@@ -68,6 +73,10 @@ export function PublishResultPanel({ ticketKey, result, onClose }: Props) {
         >
           {result.message}
         </p>
+      )}
+
+      {isFieldSuccess && result.jira_field && (
+        <FieldResult field={result.jira_field} />
       )}
 
       {result.created_test_cases.length > 0 && (
@@ -108,6 +117,7 @@ export function PublishResultPanel({ ticketKey, result, onClose }: Props) {
 }
 
 interface HeaderProps {
+  isFieldSuccess: boolean;
   isLinkedSuccess: boolean;
   isPartial: boolean;
   isCommented: boolean;
@@ -116,22 +126,38 @@ interface HeaderProps {
 }
 
 function Header({
+  isFieldSuccess,
   isLinkedSuccess,
   isPartial,
   isCommented,
   isTotalFailure,
   ticketKey,
 }: HeaderProps) {
+  if (isFieldSuccess) {
+    return (
+      <div className="flex items-center gap-2">
+        <CheckCircle2 size={14} className="text-ok" />
+        <div>
+          <h4 className="text-[12px] font-semibold text-ink">
+            Posted to Jira Test Cases field on {ticketKey}
+          </h4>
+          <p className="text-[10.5px] text-ink-faint">
+            The ticket's Test Cases field now reflects this draft.
+          </p>
+        </div>
+      </div>
+    );
+  }
   if (isLinkedSuccess) {
     return (
       <div className="flex items-center gap-2">
         <CheckCircle2 size={14} className="text-ok" />
         <div>
           <h4 className="text-[12px] font-semibold text-ink">
-            Published and linked to {ticketKey}
+            Linked to Jira ticket test cases
           </h4>
           <p className="text-[10.5px] text-ink-faint">
-            These cases should appear in the Jira Test Cases panel.
+            These cases appear in the {ticketKey} Test Cases panel.
           </p>
         </div>
       </div>
@@ -143,10 +169,11 @@ function Header({
         <MessageSquare size={14} className="text-info" />
         <div>
           <h4 className="text-[12px] font-semibold text-ink">
-            Posted as Jira comment
+            Posted as Jira comment fallback
           </h4>
           <p className="text-[10.5px] text-ink-faint">
-            These cases may not appear in the Jira Test Cases panel.
+            The comment is on {ticketKey}. The Test Cases field was not
+            updated.
           </p>
         </div>
       </div>
@@ -259,6 +286,24 @@ function FailedList({ failed }: { failed: LiveFailedPublishCase[] }) {
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+function FieldResult({ field }: { field: LiveJiraFieldResult }) {
+  return (
+    <div className="rounded-md border border-subtle bg-surface-overlay/50 px-3 py-2 text-[11px] text-ink-secondary">
+      <div className="flex items-center gap-2">
+        <CheckCircle2 size={11} className="text-ok" />
+        <span className="font-mono">{field.field_id}</span>
+        <span className="text-ink-faint">on</span>
+        <span className="font-mono">{field.ticket_key}</span>
+      </div>
+      {field.updated_at && (
+        <div className="text-[10px] text-ink-faint font-mono mt-0.5">
+          updated {field.updated_at}
+        </div>
+      )}
     </div>
   );
 }

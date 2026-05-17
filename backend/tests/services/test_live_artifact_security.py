@@ -463,6 +463,55 @@ class TestPublishExportMetadataEncryption:
         )
         _assert_encrypted(row["export_metadata"], (marker_comment_id,))
 
+    def test_jira_field_export_metadata_encrypted_at_rest(
+        self, svc, schemas, monkeypatch
+    ):
+        from services import (
+            jira_service,
+            live_publish_service as publish_service,
+        )
+
+        marker_field_id = "customfield_secret_11001"
+        marker_ticket = "FM-9"
+        case_set = _run(
+            svc.create_generated_cases(
+                schemas["LiveGeneratedCasesCreate"](
+                    ticket_key=marker_ticket,
+                    instructions="",
+                    cases=[{"name": "case-A", "objective": "x"}],
+                )
+            )
+        )
+
+        async def fake_field(ticket_key, body, field_id="customfield_11001"):
+            return {
+                "field_id": marker_field_id,
+                "ticket_key": ticket_key,
+                "updated_at": "2026-05-17T12:00:00Z",
+            }
+
+        monkeypatch.setattr(jira_service, "set_test_cases_field", fake_field)
+
+        from schemas.live_models import LivePublishCasesRequest
+
+        _run(
+            publish_service.publish_generated_cases(
+                case_set.id,
+                LivePublishCasesRequest(
+                    ticket_key=marker_ticket,
+                    project_key="FM",
+                    mode="jira_test_cases_field",
+                ),
+            )
+        )
+        row = _run(
+            _scalar(
+                "SELECT export_metadata FROM live_generated_cases WHERE id = ?",
+                case_set.id,
+            )
+        )
+        _assert_encrypted(row["export_metadata"], (marker_field_id, marker_ticket))
+
 
 class TestCommentFallbackBodyHygiene:
     """The Jira-fallback comment body is sent over the wire to Jira, not
@@ -529,6 +578,59 @@ class TestCommentFallbackBodyHygiene:
         # Ciphertext should not contain the plaintext marker either way
         # (Fernet obfuscates), but additionally the publish service must
         # never have included the body in metadata.
+        _assert_encrypted(row["export_metadata"], (secret_in_objective,))
+
+    def test_field_body_not_persisted_in_export_metadata(
+        self, svc, schemas, monkeypatch
+    ):
+        from services import (
+            jira_service,
+            live_publish_service as publish_service,
+        )
+
+        secret_in_objective = "secret-field-objective-XYZ"
+        case_set = _run(
+            svc.create_generated_cases(
+                schemas["LiveGeneratedCasesCreate"](
+                    ticket_key="FM-9",
+                    instructions="",
+                    cases=[{"name": "case-A", "objective": secret_in_objective}],
+                )
+            )
+        )
+
+        captured = {}
+
+        async def fake_field(ticket_key, body, field_id="customfield_11001"):
+            captured["body"] = body
+            return {
+                "field_id": field_id,
+                "ticket_key": ticket_key,
+                "updated_at": None,
+            }
+
+        monkeypatch.setattr(jira_service, "set_test_cases_field", fake_field)
+
+        from schemas.live_models import LivePublishCasesRequest
+
+        _run(
+            publish_service.publish_generated_cases(
+                case_set.id,
+                LivePublishCasesRequest(
+                    ticket_key="FM-9",
+                    project_key="FM",
+                    mode="jira_test_cases_field",
+                ),
+            )
+        )
+
+        row = _run(
+            _scalar(
+                "SELECT export_metadata FROM live_generated_cases WHERE id = ?",
+                case_set.id,
+            )
+        )
+        assert secret_in_objective in captured["body"]
         _assert_encrypted(row["export_metadata"], (secret_in_objective,))
 
 

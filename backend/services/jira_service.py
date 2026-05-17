@@ -116,6 +116,20 @@ def _extract_adf_text(adf: Any) -> str:
     return " ".join(parts).strip()
 
 
+def _plain_text_to_adf(text: str) -> dict[str, Any]:
+    """Convert plain text into minimal Atlassian Document Format."""
+    return {
+        "type": "doc",
+        "version": 1,
+        "content": [
+            {
+                "type": "paragraph",
+                "content": [{"type": "text", "text": text}],
+            }
+        ],
+    }
+
+
 def _extract_ticket(issue: dict) -> dict:
     fields = issue["fields"]
 
@@ -290,18 +304,7 @@ async def post_comment(ticket_key: str, body: str) -> dict:
     async with await _client() as client:
         resp = await client.post(
             f"{_base_url()}/rest/api/3/issue/{ticket_key}/comment",
-            json={
-                "body": {
-                    "type": "doc",
-                    "version": 1,
-                    "content": [
-                        {
-                            "type": "paragraph",
-                            "content": [{"type": "text", "text": body}],
-                        }
-                    ],
-                },
-            },
+            json={"body": _plain_text_to_adf(body)},
             headers={"Content-Type": "application/json"},
         )
         resp.raise_for_status()
@@ -311,6 +314,36 @@ async def post_comment(ticket_key: str, body: str) -> dict:
         "id": data["id"],
         "author": (data.get("author") or {}).get("displayName", "Unknown"),
         "created": data.get("created", ""),
+    }
+
+
+async def set_test_cases_field(
+    ticket_key: str,
+    body: str,
+    field_id: str = "customfield_11001",
+) -> dict:
+    """Write `body` into a Jira issue's Test Cases custom field.
+
+    Although this field reports as textarea/string, Jira Cloud requires
+    Atlassian Document Format (ADF) for writes. Jira's
+    `PUT /rest/api/3/issue/{key}` returns 204 No Content on success and
+    does not echo the new value, so we synthesize a sanitized
+    confirmation payload (field id, ticket key, write timestamp) that
+    the publish service can persist.
+    """
+    written_at = datetime.now(timezone.utc).isoformat()
+    async with await _client() as client:
+        resp = await client.put(
+            f"{_base_url()}/rest/api/3/issue/{ticket_key}",
+            json={"fields": {field_id: _plain_text_to_adf(body)}},
+            headers={"Content-Type": "application/json"},
+        )
+        if resp.status_code not in (200, 204):
+            resp.raise_for_status()
+    return {
+        "field_id": field_id,
+        "ticket_key": ticket_key,
+        "updated_at": written_at,
     }
 
 

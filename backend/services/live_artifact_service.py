@@ -275,9 +275,26 @@ async def patch_generated_cases(
     if patch.instructions is not None:
         sets.append("instructions = ?")
         params.append(_enc_text(patch.instructions))
+
+    # Phase 06c — `case_updates` performs a surgical per-index replacement
+    # on top of the existing case list so saving one case never overwrites
+    # its siblings. If both `cases` and `case_updates` are present, the
+    # full-list replacement wins (callers should send only one).
     if patch.cases is not None:
         sets.append("cases_json = ?")
         params.append(_enc_obj(list(patch.cases)))
+    elif patch.case_updates:
+        merged = list(existing.cases or [])
+        for entry in patch.case_updates:
+            if 0 <= entry.index < len(merged):
+                merged[entry.index] = entry.case
+            else:
+                raise ValueError(
+                    f"case_updates index {entry.index} is out of range "
+                    f"(set has {len(merged)} cases)"
+                )
+        sets.append("cases_json = ?")
+        params.append(_enc_obj(merged))
     if patch.context_metadata is not None:
         sets.append("context_metadata = ?")
         params.append(_enc_obj(patch.context_metadata))

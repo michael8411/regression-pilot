@@ -20,6 +20,7 @@ import { useLiveGenerate } from "./hooks/useLiveGenerate";
 import { useLiveGeneratedCases } from "./hooks/useLiveGeneratedCases";
 import { useOptionalLiveActivityFeed } from "./activity";
 import { GeneratedTestCaseCard } from "./GeneratedTestCaseCard";
+import { GenerationSkeletonList } from "./visual";
 import type { GeneratedTestCases, JiraTicket } from "@/types";
 
 // ---------------------------------------------------------------------------
@@ -338,7 +339,16 @@ export function LiveGeneratePanel({ ticket, onClose }: Props) {
         </div>
       )}
 
-      {result && (
+      {generating && (
+        <div className="mt-3">
+          <GenerationSkeletonList
+            count={options.maxCases}
+            ticketKey={ticket.key}
+          />
+        </div>
+      )}
+
+      {!generating && result && (
         <div className="mt-3">
           <LiveGenerateResultList result={result} />
         </div>

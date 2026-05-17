@@ -165,7 +165,10 @@ async def create_generated_cases(req: LiveGeneratedCasesCreate):
     response_model=LiveGeneratedCases,
 )
 async def patch_generated_cases(case_set_id: str, req: LiveGeneratedCasesPatch):
-    updated = await live_artifact_service.patch_generated_cases(case_set_id, req)
+    try:
+        updated = await live_artifact_service.patch_generated_cases(case_set_id, req)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if updated is None:
         raise HTTPException(status_code=404, detail="Generated cases not found")
     return updated

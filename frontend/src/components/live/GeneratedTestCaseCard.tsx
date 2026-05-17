@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight } from "@/lib/icons";
+import { PriorityPill } from "./visual";
 import type { TestCase } from "@/types";
 
 interface Props {
@@ -25,11 +26,7 @@ export function GeneratedTestCaseCard({ testCase, index }: Props) {
         <span className="text-[12px] text-ink truncate font-medium">
           {testCase.name}
         </span>
-        {testCase.priority && (
-          <span className="ml-auto text-[10px] text-ink-muted bg-surface-overlay px-1.5 py-0.5 rounded">
-            {testCase.priority}
-          </span>
-        )}
+        <PriorityPill priority={testCase.priority} className="ml-auto" />
       </button>
       {open && (
         <div className="px-3 pb-3 text-[11.5px] text-ink-secondary leading-relaxed">

@@ -161,25 +161,54 @@ LiveGeneratedCasesStatus = Literal[
 # =============================================================================
 
 
-LivePublishMode = Literal["linked_test_cases", "jira_comment"]
+# Phase 06c — the Live workflow's primary target is the Jira ticket's
+# Test Cases custom field (textarea). Comment publishing is the optional
+# fallback. `linked_test_cases` stays in the union so historical drafts
+# from earlier phases keep deserializing without crashes.
+LivePublishMode = Literal[
+    "jira_test_cases_field",
+    "jira_comment",
+    "linked_test_cases",
+]
 LivePublishTarget = Literal[
-    "zephyr_linked_tests", "jira_comment", "none"
+    "jira_test_cases_field",
+    "jira_comment",
+    "zephyr_linked_tests",
+    "none",
 ]
 
 
+# Customer-confirmed Jira field for the Live workflow target. Overridable
+# per request when a tenant uses a different field id.
+DEFAULT_JIRA_TEST_CASES_FIELD_ID = "customfield_11001"
+
+
 class LivePublishCasesRequest(BaseModel):
-    """Payload for `POST /live/generated-cases/{id}/publish`."""
+    """Payload for `POST /live/generated-cases/{id}/publish`.
+
+    Phase 06c: Live publishes default to the Jira ticket's *Test Cases*
+    custom field. Comment publishing is the optional fallback path.
+    """
 
     ticket_key: str = Field(min_length=1, max_length=64)
     project_key: str = Field(min_length=1, max_length=64)
     case_indexes: Optional[list[int]] = None
     """When None or empty, publish all cases in the set."""
-    mode: LivePublishMode = "linked_test_cases"
+    mode: LivePublishMode = "jira_test_cases_field"
     fallback_to_comment: bool = True
+    """When the primary `jira_test_cases_field` write fails, automatically
+    post the same body as a Jira comment so the customer never loses
+    publish progress to a transient field-edit failure."""
     folder_id: Optional[int] = None
-    """Optional Zephyr folder for created test cases."""
+    """Optional Zephyr folder for legacy linked-test publishes."""
     confirm_duplicate: bool = False
     """Customer acknowledged the case set was already published."""
+    body: Optional[str] = None
+    """Optional preformatted Jira-friendly body. Used for both targets so
+    the dialog preview matches the posted content byte-for-byte. When
+    omitted, the backend formatter renders the body."""
+    test_cases_field_id: str = DEFAULT_JIRA_TEST_CASES_FIELD_ID
+    """Override the target Jira custom field id per request."""
 
 
 class LiveCreatedTestCase(BaseModel):
@@ -209,6 +238,14 @@ class LiveJiraCommentResult(BaseModel):
     url: Optional[str] = None
 
 
+class LiveJiraFieldResult(BaseModel):
+    """Sanitized confirmation of a Jira custom-field write."""
+
+    field_id: str
+    ticket_key: str
+    updated_at: Optional[str] = None
+
+
 class LivePublishCasesResponse(BaseModel):
     status: LiveGeneratedCasesStatus
     target: LivePublishTarget
@@ -216,6 +253,7 @@ class LivePublishCasesResponse(BaseModel):
     created_test_cases: list[LiveCreatedTestCase] = Field(default_factory=list)
     failed: list[LiveFailedPublishCase] = Field(default_factory=list)
     jira_comment: Optional[LiveJiraCommentResult] = None
+    jira_field: Optional[LiveJiraFieldResult] = None
     appears_on_jira_ticket: bool = False
     duplicate_attempt: bool = False
     message: Optional[str] = None
@@ -232,6 +270,7 @@ class LiveExportMetadata(BaseModel):
     created_test_cases: list[LiveCreatedTestCase] = Field(default_factory=list)
     failed: list[LiveFailedPublishCase] = Field(default_factory=list)
     jira_comment: Optional[LiveJiraCommentResult] = None
+    jira_field: Optional[LiveJiraFieldResult] = None
     appears_on_jira_ticket: bool = False
     published_at: str
     duplicate_attempt: bool = False
@@ -247,9 +286,21 @@ class LiveGeneratedCasesCreate(BaseModel):
     status: LiveGeneratedCasesStatus = "draft"
 
 
+class LiveCaseUpdateEntry(BaseModel):
+    """Phase 06c — surgical replacement of a single case in a saved set.
+
+    Used by the per-case editor so saving one case never overwrites its
+    siblings on a stale read of the full list.
+    """
+
+    index: int = Field(ge=0)
+    case: dict[str, Any]
+
+
 class LiveGeneratedCasesPatch(BaseModel):
     instructions: Optional[str] = None
     cases: Optional[list[Any]] = None
+    case_updates: Optional[list[LiveCaseUpdateEntry]] = None
     context_metadata: Optional[dict[str, Any]] = None
     export_metadata: Optional[dict[str, Any]] = None
     status: Optional[LiveGeneratedCasesStatus] = None

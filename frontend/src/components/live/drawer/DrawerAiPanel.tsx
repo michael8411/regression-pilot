@@ -139,7 +139,10 @@ export const DrawerAiPanel = forwardRef<DrawerAiPanelHandle, Props>(
         )}
 
         {generating && (
-          <GenerationSkeletonList count={options.maxCases} />
+          <GenerationSkeletonList
+            count={options.maxCases}
+            ticketKey={ticket.key}
+          />
         )}
 
         {!generating && result && <LiveGenerateResultList result={result} />}

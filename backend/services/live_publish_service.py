@@ -1,22 +1,24 @@
-"""Phase 06b — publish Live-generated test cases back to a Jira ticket.
+"""Publish Live-generated test cases back to a Jira ticket.
 
 The publish service is the single execution path behind
 `POST /live/generated-cases/{case_set_id}/publish`. It coordinates:
 
   * loading the persisted generated case set from `live_artifact_service`,
-  * pushing selected cases to Zephyr Scale with issue links to the source
-    Jira ticket (primary path — these appear in the ticket's Test Cases
-    panel where Zephyr exposes linked tests),
-  * falling back to a structured Jira comment when Zephyr is unavailable
-    or linked test creation fails and the caller opted in,
+  * writing the formatted body into the Jira ticket's Test Cases custom
+    field (Phase 06c default target — the body is ADF-wrapped by
+    `jira_service.set_test_cases_field`),
+  * falling back to a structured Jira comment when the field write fails
+    and the caller opted in,
+  * legacy: pushing selected cases to Zephyr Scale with issue links to the
+    source Jira ticket when `mode=linked_test_cases` is explicitly chosen,
   * persisting encrypted export metadata + an `exported_at` timestamp on
     the case set so the UI can render durable status across reloads,
   * truthfully reporting whether the result "appears on the Jira ticket"
     so the UI never falsely promises success.
 
-The service is intentionally tolerant of provider failures: a Zephyr
-outage degrades into the comment fallback (or a typed failure when
-fallback is off) and never raises an unhandled exception across the
+The service is intentionally tolerant of provider failures: a Jira (or
+Zephyr) outage degrades into the comment fallback (or a typed failure
+when fallback is off) and never raises an unhandled exception across the
 route boundary.
 """
 

@@ -1,9 +1,10 @@
 /**
- * Phase 06c — canonical Jira-comment body formatter for Live publishes.
+ * Phase 06c — canonical Jira body formatter for Live publishes.
  *
  * The publish dialog renders this output as a read-only preview, then
- * sends the same string to the backend via `comment_body` on the publish
- * request. The backend posts it verbatim, so what the user sees in the
+ * sends the same string to the backend via `body` on the publish request.
+ * The backend posts it verbatim into the Jira Test Cases field (default)
+ * or the Jira comment (fallback/optional), so what the user sees in the
  * preview is byte-for-byte what lands in Jira.
  *
  * Kept in sync with `backend/services/live_publish_service.py::

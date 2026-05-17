@@ -1,13 +1,13 @@
 /**
- * Phase 06b — render the outcome of a publish-to-Jira attempt.
+ * Render the outcome of a publish-to-Jira attempt.
  *
  * The copy here is the source of truth for the "did this actually appear on
- * the Jira ticket?" question. Three honest states:
+ * the Jira ticket?" question. Honest states:
  *
- *  1. Linked publish OK   — "Published and linked to TICKET-KEY"
- *  2. Comment fallback OK — "Posted as Jira comment. It may not appear in
- *                            the Test Cases panel."
- *  3. Partial/failure     — show created + failed lists separately, never
+ *  1. Test Cases field OK  — "Posted to Jira Test Cases field on TICKET" (06c)
+ *  2. Linked publish OK    — "Linked to Jira ticket test cases" (legacy Zephyr)
+ *  3. Comment fallback OK  — "Posted as Jira comment fallback"
+ *  4. Partial/failure      — show created + failed lists separately, never
  *                            imply all cases appear on the ticket.
  *
  * The panel never claims "appears on ticket" unless the backend response

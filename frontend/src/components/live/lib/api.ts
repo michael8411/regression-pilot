@@ -245,9 +245,10 @@ export function deleteLiveGeneratedCases(
   });
 }
 
-// Phase 06b — publish a generated case set back to the source Jira ticket.
-// Primary path links to Zephyr Scale test cases on the Jira issue; fallback
-// posts a structured Jira comment.
+// Publish a generated case set back to the source Jira ticket. Default
+// target (06c) writes the ticket's Test Cases custom field; falls back to
+// a Jira comment when enabled. Linked Zephyr publishing is retained as an
+// opt-in legacy mode.
 export function publishLiveGeneratedCases(
   caseSetId: string,
   request: LivePublishCasesRequest,

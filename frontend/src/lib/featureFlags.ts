@@ -30,11 +30,12 @@ const DEFAULTS: Record<FeatureFlag, boolean> = {
   //   A) frontend build clean (1943 modules, 0 TS errors)
   //   B–D) route smoke / builder / card analytics verified via code audit
   //        against the locked visual contract (00b).
-  //   E) drawer + AI + publish: linked Zephyr publish returns
+  //   E) drawer + AI + publish: default Jira Test Cases field write (06c)
+  //      and legacy linked Zephyr publish both set
   //      appears_on_jira_ticket: true; comment fallback returns false;
   //      duplicate 409 gated by confirm_duplicate; partial publish
   //      renders created + failed separately; PublishResultPanel never
-  //      claims "appears on ticket" without linked Zephyr success.
+  //      claims "appears on ticket" without a confirmed Jira-side write.
   //   F) targeted backend suites: 104 Phase-08 tests pass; full suite
   //      500/500.
   //   G) encrypted-at-rest assertions cover every sensitive column

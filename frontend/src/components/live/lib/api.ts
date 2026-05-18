@@ -90,6 +90,15 @@ export function listJiraVersionsForLive(
   );
 }
 
+export async function listJiraComponentsForLive(
+  projectKey: string,
+): Promise<string[]> {
+  const rows = await jfetch<Array<{ name: string }>>(
+    `/jira/projects/${encodeURIComponent(projectKey)}/components`,
+  );
+  return rows.map((r) => r.name).filter(Boolean);
+}
+
 // Comments
 export function postJiraComment(
   ticketKey: string,

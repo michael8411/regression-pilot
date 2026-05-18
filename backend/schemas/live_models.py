@@ -38,6 +38,10 @@ class LiveBoardViewPreferences(BaseModel):
     boardColumnMode: BoardColumnMode = "qa"
     density: BoardDensity = "cozy"
     lastOpenedTicketKey: str = ""
+    # Phase 13 — additive view prefs. Legacy rows without these fields
+    # deserialize cleanly because both have safe defaults.
+    showEmptyNonQaColumns: bool = False
+    collapsedLaneKeys: list[str] = Field(default_factory=list)
 
 
 class CreateLiveBoardRequest(BaseModel):

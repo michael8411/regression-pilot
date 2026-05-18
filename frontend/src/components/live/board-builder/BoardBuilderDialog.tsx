@@ -9,16 +9,10 @@ import { createPortal } from "react-dom";
 import { clsx } from "clsx";
 import { X } from "@/lib/icons";
 import {
-  buildJqlFromSimpleDraft,
   deriveDefaultBoardName,
   validateBuilderDraft,
 } from "@/components/live/lib/boardBuilder";
-import {
-  DEFAULT_BUILDER_VIEW_PREFS,
-  DEFAULT_QA_STATUS_MAP,
-  DEFAULT_REFRESH_INTERVAL_SEC,
-  type LiveBoardBuilderSimpleDraft,
-} from "@/components/live/types";
+import { type LiveBoardBuilderSimpleDraft } from "@/components/live/types";
 import type {
   LiveBoard,
   LiveBoardProfile,
@@ -29,6 +23,15 @@ import { SimpleBuilderStep } from "./SimpleBuilderStep";
 import { StructureMappingStep } from "./StructureMappingStep";
 import { AdvancedJqlSection } from "./AdvancedJqlSection";
 import { BuilderPreviewPanel } from "./BuilderPreviewPanel";
+import { BoardScopeWarning } from "./BoardScopeWarning";
+import {
+  AUTO_LANE_GROUPING,
+  defaultBoardProfile,
+  defaultViewPrefs,
+  type LaneGroupingOption,
+} from "./lib/defaultBoardProfile";
+import { buildSimpleJql } from "./lib/buildSimpleJql";
+import { listJiraComponentsForLive } from "@/components/live/lib/api";
 import {
   summarizeStatuses,
   useBoardPreview,
@@ -56,9 +59,10 @@ interface BuilderState {
   name: string;
   projectKey: string;
   versionName: string;
+  components: string[];
   selectedStatuses: string[];
   assigneeScope: "anyone" | "currentUser";
-  laneGrouping: "none" | "epic" | "parent" | "component";
+  laneGrouping: LaneGroupingOption;
   refreshIntervalSec: number;
   pinned: boolean;
   qaStatusMap: LiveBoardQaStatusMap;
@@ -82,12 +86,6 @@ function inferProjectKey(
   return fallback;
 }
 
-const DEFAULT_QA_STATUS_SET = new Set([
-  ...DEFAULT_QA_STATUS_MAP.ready,
-  ...DEFAULT_QA_STATUS_MAP.testing,
-  ...DEFAULT_QA_STATUS_MAP.done,
-]);
-
 function buildInitialState(
   initial: LiveBoard | null | undefined,
   defaultProjectKey: string,
@@ -95,10 +93,11 @@ function buildInitialState(
   const profile = initial?.profile ?? null;
   const projectKey = inferProjectKey(initial, defaultProjectKey);
   const versionName = profile?.versionName ?? "";
+  const defaults = defaultBoardProfile(projectKey, versionName);
 
   const selectedStatuses = profile?.selectedStatuses?.length
     ? [...profile.selectedStatuses]
-    : Array.from(DEFAULT_QA_STATUS_SET);
+    : [...defaults.selectedStatuses];
   const qaStatusMap = profile?.qaStatusMap
     ? {
         ready: [...profile.qaStatusMap.ready],
@@ -106,29 +105,39 @@ function buildInitialState(
         done: [...profile.qaStatusMap.done],
       }
     : {
-        ready: [...DEFAULT_QA_STATUS_MAP.ready],
-        testing: [...DEFAULT_QA_STATUS_MAP.testing],
-        done: [...DEFAULT_QA_STATUS_MAP.done],
+        ready: [...defaults.qaStatusMap.ready],
+        testing: [...defaults.qaStatusMap.testing],
+        done: [...defaults.qaStatusMap.done],
       };
 
   const builderMode = profile?.builderMode ?? "simple";
+  const laneGrouping: LaneGroupingOption = initial
+    ? (profile?.laneGrouping ?? defaults.laneGrouping)
+    : AUTO_LANE_GROUPING;
 
   return {
     name:
       initial?.name ?? deriveDefaultBoardName(projectKey, versionName || ""),
     projectKey,
     versionName,
+    components: [],
     selectedStatuses,
-    assigneeScope: profile?.assigneeScope ?? "anyone",
-    laneGrouping: profile?.laneGrouping ?? "none",
+    assigneeScope: profile?.assigneeScope ?? defaults.assigneeScope,
+    laneGrouping,
     refreshIntervalSec:
-      profile?.refreshIntervalSec ?? DEFAULT_REFRESH_INTERVAL_SEC,
+      profile?.refreshIntervalSec ?? defaults.refreshIntervalSec,
     pinned: initial?.pinned ?? false,
     qaStatusMap,
     customJql: builderMode === "advanced" || (!!initial && !profile),
     manualJql: initial?.jql ?? "",
-    viewPrefs: initial?.view_prefs ?? { ...DEFAULT_BUILDER_VIEW_PREFS },
+    viewPrefs: initial?.view_prefs ?? defaultViewPrefs(),
   };
+}
+
+function resolveLaneGrouping(
+  option: LaneGroupingOption,
+): LiveBoardProfile["laneGrouping"] {
+  return option === AUTO_LANE_GROUPING ? "none" : option;
 }
 
 function toSimpleDraft(state: BuilderState): LiveBoardBuilderSimpleDraft {
@@ -139,7 +148,7 @@ function toSimpleDraft(state: BuilderState): LiveBoardBuilderSimpleDraft {
     versionName: state.versionName,
     selectedStatuses: state.selectedStatuses,
     qaStatusMap: state.qaStatusMap,
-    laneGrouping: state.laneGrouping,
+    laneGrouping: resolveLaneGrouping(state.laneGrouping),
     assigneeScope: state.assigneeScope,
     refreshIntervalSec: state.refreshIntervalSec,
     columns: state.selectedStatuses,
@@ -157,7 +166,7 @@ function buildProfile(state: BuilderState, jql: string): LiveBoardProfile {
       testing: [...state.qaStatusMap.testing],
       done: [...state.qaStatusMap.done],
     },
-    laneGrouping: state.laneGrouping,
+    laneGrouping: resolveLaneGrouping(state.laneGrouping),
     assigneeScope: state.assigneeScope,
     refreshIntervalSec: state.refreshIntervalSec,
     customJql: jql,
@@ -210,11 +219,45 @@ export function BoardBuilderDialog({
   }, []);
 
   const autoJql = useMemo(
-    () => buildJqlFromSimpleDraft(toSimpleDraft(state)),
-    [state],
+    () =>
+      buildSimpleJql({
+        projectKey: state.projectKey,
+        versionName: state.versionName,
+        components: state.components,
+        selectedStatuses: state.selectedStatuses,
+        assigneeScope: state.assigneeScope,
+      }),
+    [
+      state.projectKey,
+      state.versionName,
+      state.components,
+      state.selectedStatuses,
+      state.assigneeScope,
+    ],
   );
 
   const effectiveJql = state.customJql ? state.manualJql : autoJql;
+
+  // Optional Components lookup. Silently hidden when the endpoint is missing.
+  const [componentOptions, setComponentOptions] = useState<string[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    if (!state.projectKey) {
+      setComponentOptions([]);
+      return;
+    }
+    void (async () => {
+      try {
+        const list = await listJiraComponentsForLive(state.projectKey);
+        if (!cancelled) setComponentOptions(list);
+      } catch {
+        if (!cancelled) setComponentOptions([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [state.projectKey]);
 
   // Detected statuses from preview, merged with selected statuses so the
   // mapping step is never empty after the user picks at least one option.
@@ -336,8 +379,10 @@ export function BoardBuilderDialog({
                 laneGrouping: state.laneGrouping,
                 refreshIntervalSec: state.refreshIntervalSec,
                 pinned: state.pinned,
+                components: state.components,
               }}
               statusOptions={detectedStatuses}
+              componentOptions={componentOptions}
               onChange={update}
             />
 
@@ -370,7 +415,7 @@ export function BoardBuilderDialog({
               state={preview.state}
               effectiveJql={effectiveJql}
               onRun={runPreview}
-              laneGrouping={state.laneGrouping}
+              laneGrouping={resolveLaneGrouping(state.laneGrouping)}
             />
             <section className="rounded-md border border-subtle bg-surface-overlay/40 px-3 py-2.5">
               <h4 className="text-[11px] font-semibold text-ink mb-1">
@@ -380,6 +425,18 @@ export function BoardBuilderDialog({
                 {effectiveJql || "(empty)"}
               </code>
             </section>
+            <BoardScopeWarning
+              previewState={preview.state}
+              jql={effectiveJql}
+              hasNarrowingFilter={
+                !!state.versionName ||
+                state.components.length > 0 ||
+                state.assigneeScope === "currentUser"
+              }
+              onGroupByEpic={() =>
+                setState((s) => ({ ...s, laneGrouping: "epic" }))
+              }
+            />
             {validation.errors.length > 0 && (
               <ul className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[11px] text-ink-secondary flex flex-col gap-0.5">
                 {validation.errors.map((e) => (

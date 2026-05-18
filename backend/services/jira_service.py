@@ -47,6 +47,24 @@ async def get_projects() -> list[dict]:
         ]
 
 
+async def get_components(project_key: str) -> list[dict]:
+    async with await _client() as client:
+        resp = await client.get(
+            f"{_base_url()}/rest/api/3/project/{project_key}/components"
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    return [
+        {
+            "id": str(c.get("id", "")),
+            "name": c.get("name", ""),
+            "description": c.get("description", ""),
+        }
+        for c in data
+        if c.get("name")
+    ]
+
+
 async def get_versions(
     project_key: str,
     status: str = "unreleased",
@@ -100,7 +118,42 @@ FIELDS = [
     "updated",
     "resolution",
     "comment",
+    "parent",
 ]
+
+
+def _epic_field_name() -> str:
+    return get_settings().jira_epic_link_field
+
+
+def _extract_lane_keys(issue: dict) -> dict:
+    fields = issue.get("fields") or {}
+    epic_field = _epic_field_name()
+    raw_epic = fields.get(epic_field)
+    epic_key = raw_epic if isinstance(raw_epic, str) and raw_epic else None
+
+    parent = fields.get("parent") or {}
+    parent_key = parent.get("key") if isinstance(parent, dict) else None
+    parent_type = (
+        (parent.get("fields", {}).get("issuetype") or {}).get("name")
+        if isinstance(parent, dict)
+        else None
+    )
+    if not epic_key and parent_key and parent_type == "Epic":
+        epic_key = parent_key
+
+    components = fields.get("components") or []
+    component_name = None
+    if isinstance(components, list) and components:
+        first = components[0]
+        if isinstance(first, dict):
+            component_name = first.get("name")
+
+    return {
+        "epic_key": epic_key or None,
+        "parent_key": parent_key or None,
+        "component_name": component_name or None,
+    }
 
 
 def _extract_adf_text(adf: Any) -> str:
@@ -150,6 +203,8 @@ def _extract_ticket(issue: dict) -> dict:
     desc_raw = fields.get("description", "") or ""
     description = _extract_adf_text(desc_raw) if isinstance(desc_raw, dict) else str(desc_raw)
 
+    lane_keys = _extract_lane_keys(issue)
+
     return {
         "key": issue["key"],
         "id": issue["id"],
@@ -167,6 +222,9 @@ def _extract_ticket(issue: dict) -> dict:
         "updated": fields.get("updated", ""),
         "description": description,
         "comments": comments,
+        "epic_key": lane_keys["epic_key"],
+        "parent_key": lane_keys["parent_key"],
+        "component_name": lane_keys["component_name"],
     }
 
 
@@ -252,7 +310,10 @@ async def get_tickets_by_keys(ticket_keys: list[str]) -> list[dict]:
 
 async def get_board(jql: str, fields: Optional[list[str]] = None) -> dict:
     """Fetch tickets matching `jql`, grouped by Jira status name."""
-    use_fields = fields or FIELDS
+    use_fields = list(fields or FIELDS)
+    epic_field = _epic_field_name()
+    if epic_field and epic_field not in use_fields:
+        use_fields.append(epic_field)
     async with await _client() as client:
         all_issues: list[dict] = []
         start_at = 0

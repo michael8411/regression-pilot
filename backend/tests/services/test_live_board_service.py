@@ -140,6 +140,129 @@ class TestDelete:
         assert _run(live_service.delete_board("nope")) is False
 
 
+class TestSummarizeBoardScope:
+
+    def test_empty_summary(self, live_service):
+        s = live_service.summarize_board_scope([])
+        assert s == {"total": 0, "distinct_epics": 0, "distinct_components": 0}
+
+    def test_single_epic(self, live_service):
+        tickets = [
+            {"epic_key": "FM-1", "component_name": "Mobile"},
+            {"epic_key": "FM-1", "component_name": "Mobile"},
+            {"epic_key": "FM-1", "component_name": None},
+        ]
+        s = live_service.summarize_board_scope(tickets)
+        assert s == {
+            "total": 3,
+            "distinct_epics": 1,
+            "distinct_components": 1,
+        }
+
+    def test_multi_epic_multi_component(self, live_service):
+        tickets = [
+            {"epic_key": "FM-1", "component_name": "Mobile"},
+            {"epic_key": "FM-2", "component_name": "Telematics"},
+            {"epic_key": "FM-3", "component_name": "Mobile"},
+        ]
+        s = live_service.summarize_board_scope(tickets)
+        assert s == {
+            "total": 3,
+            "distinct_epics": 3,
+            "distinct_components": 2,
+        }
+
+
+class TestExtractLaneKeys:
+
+    def test_epic_from_epic_field(self, live_service, monkeypatch):
+        from services import jira_service
+
+        issue = {
+            "fields": {
+                "customfield_10014": "FM-100",
+                "components": [{"name": "Mobile"}],
+            }
+        }
+        out = jira_service._extract_lane_keys(issue)
+        assert out["epic_key"] == "FM-100"
+        assert out["parent_key"] is None
+        assert out["component_name"] == "Mobile"
+
+    def test_epic_falls_back_to_epic_parent(self, live_service):
+        from services import jira_service
+
+        issue = {
+            "fields": {
+                "customfield_10014": None,
+                "parent": {
+                    "key": "FM-50",
+                    "fields": {"issuetype": {"name": "Epic"}},
+                },
+            }
+        }
+        out = jira_service._extract_lane_keys(issue)
+        assert out["epic_key"] == "FM-50"
+        assert out["parent_key"] == "FM-50"
+
+    def test_non_epic_parent_does_not_promote(self, live_service):
+        from services import jira_service
+
+        issue = {
+            "fields": {
+                "parent": {
+                    "key": "FM-50",
+                    "fields": {"issuetype": {"name": "Story"}},
+                },
+            }
+        }
+        out = jira_service._extract_lane_keys(issue)
+        assert out["epic_key"] is None
+        assert out["parent_key"] == "FM-50"
+
+    def test_no_parent_no_components(self, live_service):
+        from services import jira_service
+
+        out = jira_service._extract_lane_keys({"fields": {}})
+        assert out == {
+            "epic_key": None,
+            "parent_key": None,
+            "component_name": None,
+        }
+
+    def test_multiple_components_uses_first(self, live_service):
+        from services import jira_service
+
+        issue = {
+            "fields": {
+                "components": [
+                    {"name": "Telematics"},
+                    {"name": "Mobile"},
+                ]
+            }
+        }
+        out = jira_service._extract_lane_keys(issue)
+        assert out["component_name"] == "Telematics"
+
+    def test_custom_epic_field_via_setting(
+        self, live_service, monkeypatch
+    ):
+        from services import jira_service
+
+        monkeypatch.setattr(
+            jira_service, "_epic_field_name", lambda: "customfield_99999"
+        )
+
+        issue = {
+            "fields": {
+                "customfield_99999": "ALT-1",
+                "customfield_10014": "STALE-1",
+            }
+        }
+        out = jira_service._extract_lane_keys(issue)
+        assert out["epic_key"] == "ALT-1"
+
+
 class TestCorruption:
 
     def test_corrupted_jql_returns_empty_string(self, live_service):

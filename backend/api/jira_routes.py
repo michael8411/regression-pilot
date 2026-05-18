@@ -67,6 +67,14 @@ async def list_versions(
         raise upstream_error("Jira API", e)
 
 
+@router.get("/projects/{project_key}/components")
+async def list_components(project_key: str):
+    try:
+        return await jira_service.get_components(project_key)
+    except Exception as e:
+        raise upstream_error("Jira API", e)
+
+
 @router.get("/tickets")
 async def get_tickets(fix_version: str):
     try:

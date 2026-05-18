@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     app_env: str = "development"
     log_to_file: bool = False
 
+    # Tenant epic-link custom field. Override via env JIRA_EPIC_LINK_FIELD.
+    jira_epic_link_field: str = "customfield_10014"
+
     @property
     def jira_configured(self) -> bool:
         return bool(self.jira_base_url and self.jira_email and self.jira_api_token)

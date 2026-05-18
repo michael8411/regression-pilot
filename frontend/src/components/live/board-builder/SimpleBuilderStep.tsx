@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import { clsx } from "clsx";
-import type {
-  LiveBoardAssigneeScope,
-  LiveBoardLaneGrouping,
-} from "@/types/live";
+import type { LiveBoardAssigneeScope } from "@/types/live";
 import {
   listJiraProjectsForLive,
   listJiraVersionsForLive,
 } from "@/components/live/lib/api";
+import {
+  AUTO_LANE_GROUPING,
+  DEFAULT_STATUS_OPTIONS,
+  type LaneGroupingOption,
+} from "./lib/defaultBoardProfile";
 import type { JiraProject, JiraVersion } from "@/types";
 
 export interface SimpleBuilderValue {
@@ -16,19 +18,23 @@ export interface SimpleBuilderValue {
   versionName: string;
   selectedStatuses: string[];
   assigneeScope: LiveBoardAssigneeScope;
-  laneGrouping: LiveBoardLaneGrouping;
+  laneGrouping: LaneGroupingOption;
   refreshIntervalSec: number;
   pinned: boolean;
+  components: string[];
 }
 
 interface Props {
   value: SimpleBuilderValue;
   /** Status options to choose from (detected via preview when available). */
   statusOptions: string[];
+  /** Optional component names; section hidden when empty. */
+  componentOptions?: string[];
   onChange: (next: Partial<SimpleBuilderValue>) => void;
 }
 
-const LANES: { id: LiveBoardLaneGrouping; label: string }[] = [
+const LANES: { id: LaneGroupingOption; label: string }[] = [
+  { id: AUTO_LANE_GROUPING, label: "Auto" },
   { id: "none", label: "None" },
   { id: "epic", label: "Epic" },
   { id: "parent", label: "Parent" },
@@ -42,20 +48,12 @@ const REFRESH_OPTIONS: { sec: number; label: string }[] = [
   { sec: 900, label: "15m" },
 ];
 
-const DEFAULT_STATUS_OPTIONS = [
-  "Open",
-  "In Progress",
-  "In Review",
-  "Ready for QA",
-  "Ready to Test",
-  "In Testing",
-  "Done",
-  "Closed",
-];
+const MAX_COMPONENTS = 3;
 
 export function SimpleBuilderStep({
   value,
   statusOptions,
+  componentOptions,
   onChange,
 }: Props) {
   const [projects, setProjects] = useState<JiraProject[]>([]);
@@ -99,7 +97,7 @@ export function SimpleBuilderStep({
   }, [value.projectKey]);
 
   const options =
-    statusOptions.length > 0 ? statusOptions : DEFAULT_STATUS_OPTIONS;
+    statusOptions.length > 0 ? statusOptions : [...DEFAULT_STATUS_OPTIONS];
 
   const toggleStatus = (s: string) => {
     const next = new Set(value.selectedStatuses);
@@ -107,6 +105,18 @@ export function SimpleBuilderStep({
     else next.add(s);
     onChange({ selectedStatuses: Array.from(next) });
   };
+
+  const toggleComponent = (c: string) => {
+    const set = new Set(value.components ?? []);
+    if (set.has(c)) {
+      set.delete(c);
+    } else if (set.size < MAX_COMPONENTS) {
+      set.add(c);
+    }
+    onChange({ components: Array.from(set) });
+  };
+
+  const showComponents = !!componentOptions && componentOptions.length > 0;
 
   return (
     <div className="flex flex-col gap-3">
@@ -158,8 +168,43 @@ export function SimpleBuilderStep({
               </option>
             ))}
           </select>
+          <p className="mt-1 text-[10.5px] text-ink-faint">
+            Pick a version to keep this board focused.
+          </p>
         </Field>
       </div>
+
+      {showComponents && (
+        <Field label="Components (optional)">
+          <div className="flex flex-wrap gap-1.5">
+            {(componentOptions ?? []).map((c) => {
+              const on = (value.components ?? []).includes(c);
+              const disabled =
+                !on && (value.components ?? []).length >= MAX_COMPONENTS;
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => toggleComponent(c)}
+                  aria-pressed={on}
+                  disabled={disabled}
+                  className={clsx(
+                    "h-7 px-2.5 rounded-full text-[11.5px] border transition-colors disabled:opacity-40",
+                    on
+                      ? "bg-accent-dim text-accent-text border-accent/[0.3]"
+                      : "bg-surface-elevated text-ink-muted border-subtle hover:text-ink hover:border-muted",
+                  )}
+                >
+                  {c}
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-1 text-[10.5px] text-ink-faint">
+            AND-joined into the board JQL. Max {MAX_COMPONENTS}.
+          </p>
+        </Field>
+      )}
 
       <Field label="Statuses to track">
         <div className="flex flex-wrap gap-1.5">
@@ -232,7 +277,7 @@ export function SimpleBuilderStep({
         </Field>
       </div>
 
-      <Field label="Lane grouping (optional)">
+      <Field label="Lane grouping">
         <div className="flex flex-wrap gap-1.5">
           {LANES.map((l) => (
             <button
@@ -252,8 +297,8 @@ export function SimpleBuilderStep({
           ))}
         </div>
         <p className="mt-1 text-[10.5px] text-ink-faint">
-          Group tickets into rows for multi-team boards. Defaults to no
-          grouping — the board still uses the QA Lens columns regardless.
+          Group tickets into rows for multi-team boards. Auto picks Epic when
+          the board is broad.
         </p>
       </Field>
 

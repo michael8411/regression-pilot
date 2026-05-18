@@ -34,6 +34,10 @@ export interface JiraTicket {
   updated: string;
   description: string;
   comments: JiraComment[];
+  /** Phase 13 — backend-extracted lane keys; optional for legacy responses. */
+  epic_key?: string | null;
+  parent_key?: string | null;
+  component_name?: string | null;
 }
 
 export interface JiraComment {

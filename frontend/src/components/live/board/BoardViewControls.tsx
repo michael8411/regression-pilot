@@ -1,22 +1,23 @@
-/**
- * Phase 05 — board view controls.
- *
- * Right-aligned strip of segmented toggles for column mode + density,
- * plus the explicit refresh button.
- */
-
 import { clsx } from "clsx";
 import { Loader2, RefreshCw } from "@/lib/icons";
-import type { LiveBoardColumnMode, LiveBoardDensity } from "@/types/live";
+import type {
+  LiveBoardColumnMode,
+  LiveBoardDensity,
+  LiveBoardLaneGrouping,
+} from "@/types/live";
 
-export type ColumnModeKey = LiveBoardColumnMode; // "all" | "qa"
-export type DensityKey = LiveBoardDensity; // "compact" | "cozy" | "roomy"
+export type ColumnModeKey = LiveBoardColumnMode;
+export type DensityKey = LiveBoardDensity;
 
 interface Props {
   columnMode: ColumnModeKey;
   onColumnModeChange: (next: ColumnModeKey) => void;
   density: DensityKey;
   onDensityChange: (next: DensityKey) => void;
+  laneGrouping: LiveBoardLaneGrouping;
+  onLaneGroupingChange: (next: LiveBoardLaneGrouping) => void;
+  showEmpty: boolean;
+  onShowEmptyChange: (next: boolean) => void;
   onRefresh: () => void;
   refreshing: boolean;
   fetchedAt: string | null;
@@ -33,11 +34,22 @@ const DENSITY_OPTIONS: { value: DensityKey; label: string }[] = [
   { value: "roomy", label: "Roomy" },
 ];
 
+const LANE_OPTIONS: { value: LiveBoardLaneGrouping; label: string }[] = [
+  { value: "none", label: "No lanes" },
+  { value: "epic", label: "Epic" },
+  { value: "parent", label: "Parent" },
+  { value: "component", label: "Component" },
+];
+
 export function BoardViewControls({
   columnMode,
   onColumnModeChange,
   density,
   onDensityChange,
+  laneGrouping,
+  onLaneGroupingChange,
+  showEmpty,
+  onShowEmptyChange,
   onRefresh,
   refreshing,
   fetchedAt,
@@ -49,6 +61,23 @@ export function BoardViewControls({
         value={columnMode}
         options={COLUMN_OPTIONS}
         onChange={onColumnModeChange}
+      />
+      {columnMode === "all" && (
+        <label className="text-[10.5px] text-ink-muted flex items-center gap-1 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={showEmpty}
+            onChange={(e) => onShowEmptyChange(e.target.checked)}
+            className="h-3 w-3"
+          />
+          Show empty
+        </label>
+      )}
+      <SegmentedToggle
+        ariaLabel="Lane grouping"
+        value={laneGrouping}
+        options={LANE_OPTIONS}
+        onChange={onLaneGroupingChange}
       />
       <SegmentedToggle
         ariaLabel="Card density"

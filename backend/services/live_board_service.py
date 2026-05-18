@@ -221,6 +221,18 @@ async def update_board(
     return await get_board(board_id)
 
 
+def summarize_board_scope(tickets: list[dict]) -> dict:
+    epics = {t.get("epic_key") for t in tickets if t.get("epic_key")}
+    components = {
+        t.get("component_name") for t in tickets if t.get("component_name")
+    }
+    return {
+        "total": len(tickets),
+        "distinct_epics": len(epics),
+        "distinct_components": len(components),
+    }
+
+
 async def delete_board(board_id: str) -> bool:
     async with get_connection() as db:
         cursor = await db.execute(

@@ -1,17 +1,10 @@
-/**
- * Phase 05 — board view top bar.
- *
- * Left side: board name + JQL freshness line.
- * Right side: <BoardViewControls /> (column mode + density + refresh).
- */
-
 import { BrandTile } from "@/components/live/visual";
 import {
   BoardViewControls,
   type ColumnModeKey,
   type DensityKey,
 } from "./BoardViewControls";
-import type { LiveBoard } from "@/types/live";
+import type { LiveBoard, LiveBoardLaneGrouping } from "@/types/live";
 
 interface Props {
   board: LiveBoard;
@@ -23,6 +16,10 @@ interface Props {
   onColumnModeChange: (next: ColumnModeKey) => void;
   density: DensityKey;
   onDensityChange: (next: DensityKey) => void;
+  laneGrouping: LiveBoardLaneGrouping;
+  onLaneGroupingChange: (next: LiveBoardLaneGrouping) => void;
+  showEmpty: boolean;
+  onShowEmptyChange: (next: boolean) => void;
 }
 
 function inferProjectKey(board: LiveBoard): string {
@@ -42,6 +39,10 @@ export function BoardViewHeader({
   onColumnModeChange,
   density,
   onDensityChange,
+  laneGrouping,
+  onLaneGroupingChange,
+  showEmpty,
+  onShowEmptyChange,
 }: Props) {
   const projectKey = inferProjectKey(board);
 
@@ -64,6 +65,10 @@ export function BoardViewHeader({
         onColumnModeChange={onColumnModeChange}
         density={density}
         onDensityChange={onDensityChange}
+        laneGrouping={laneGrouping}
+        onLaneGroupingChange={onLaneGroupingChange}
+        showEmpty={showEmpty}
+        onShowEmptyChange={onShowEmptyChange}
         onRefresh={onRefresh}
         refreshing={refreshing}
         fetchedAt={fetchedAt}

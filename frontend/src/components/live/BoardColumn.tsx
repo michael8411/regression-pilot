@@ -28,6 +28,8 @@ interface Props {
   density?: LiveBoardDensityKey;
   /** Dim the column body at 60% opacity (All columns mode, non-QA bucket). */
   dim?: boolean;
+  /** Render as a slim placeholder (empty QA column). */
+  slim?: boolean;
 }
 
 export function BoardColumn({
@@ -36,6 +38,7 @@ export function BoardColumn({
   onOpen,
   density = "cozy",
   dim = false,
+  slim = false,
 }: Props) {
   const { isOver, setNodeRef } = useDroppable({
     id: status,
@@ -45,6 +48,34 @@ export function BoardColumn({
 
   const bucket = classifyStatus(status);
   const { fg: headerFg } = statusColor(bucket);
+
+  if (slim) {
+    return (
+      <section
+        ref={setNodeRef}
+        aria-label={`${status} (0 tickets)`}
+        title="No tickets in this column right now."
+        className={clsx(
+          "flex flex-col w-32 shrink-0 rounded-xl border bg-surface",
+          isOver ? "border-accent/[0.4]" : "border-subtle",
+        )}
+      >
+        <header className="flex items-center gap-1.5 px-2 py-1.5">
+          <StatusDot tone={bucket} />
+          <h3
+            className={clsx(
+              "text-[10px] font-semibold uppercase font-mono tracking-wider truncate",
+              headerFg,
+            )}
+            title={status}
+          >
+            {status}
+          </h3>
+          <span className="ml-auto text-[10px] text-ink-faint font-mono">0</span>
+        </header>
+      </section>
+    );
+  }
 
   return (
     <section

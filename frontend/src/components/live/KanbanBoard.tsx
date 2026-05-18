@@ -1,15 +1,4 @@
-/**
- * Phase 05 — kanban board with column-mode + density controls.
- *
- * - `columnMode`: "all" (default) shows every column with non-QA ones dimmed
- *                  to 60% opacity. "qa" hides non-QA columns entirely.
- * - `density`: "compact" | "cozy" | "roomy" — passed down to TicketCard.
- *
- * State is local to the session. Phase 06 may persist these via
- * board.view_prefs.
- */
-
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   DndContext,
   PointerSensor,
@@ -21,11 +10,16 @@ import {
 import { RefreshCw } from "@/lib/icons";
 import { useBoard } from "./BoardProvider";
 import { useOptionalLiveActivityFeed } from "./activity";
-import { resolveColumns } from "./lib/statusColumns";
-import { classifyStatus } from "./lib/statusTaxonomy";
 import { BoardToolbar } from "./BoardToolbar";
 import { BoardColumn } from "./BoardColumn";
+import { BoardSwimlane } from "./board/BoardSwimlane";
+import {
+  resolveBoardColumns,
+  type ResolvedColumn,
+} from "./board/lib/columnVisibility";
+import { groupTicketsByLane } from "./board/lib/laneGrouping";
 import type { ColumnModeKey, DensityKey } from "./board";
+import type { LiveBoardLaneGrouping } from "@/types/live";
 import { useRoute } from "@/contexts/RouteContext";
 import {
   useRegisterCommand,
@@ -33,7 +27,6 @@ import {
 } from "@/contexts/CommandRegistryContext";
 
 interface Props {
-  /** Click handler from LiveWorkspace; 8d wires to drawer open. */
   onOpenTicket?: (key: string) => void;
 }
 
@@ -43,14 +36,31 @@ export function KanbanBoard({ onOpenTicket }: Props) {
   const { goto } = useRoute();
   const [toast, setToast] = useState<string | null>(null);
 
-  // Phase 05 — local view controls.
   const initialDensity =
     (board.board?.view_prefs?.density as DensityKey | undefined) ?? "cozy";
   const initialColumnMode =
     (board.board?.view_prefs?.boardColumnMode as ColumnModeKey | undefined) ??
-    "all";
+    "qa";
+  const initialShowEmpty =
+    board.board?.view_prefs?.showEmptyNonQaColumns ?? false;
+  const initialLane: LiveBoardLaneGrouping =
+    board.board?.profile?.laneGrouping ?? "none";
+
   const [density, setDensity] = useState<DensityKey>(initialDensity);
-  const [columnMode, setColumnMode] = useState<ColumnModeKey>(initialColumnMode);
+  const [columnMode, setColumnMode] =
+    useState<ColumnModeKey>(initialColumnMode);
+  const [showEmpty, setShowEmpty] = useState<boolean>(initialShowEmpty);
+  const [laneGrouping, setLaneGrouping] =
+    useState<LiveBoardLaneGrouping>(initialLane);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  // Sync local state with persisted view_prefs when the board reloads (e.g.
+  // after the provider applies an auto-lane resolution).
+  useEffect(() => {
+    if (board.board?.profile?.laneGrouping) {
+      setLaneGrouping(board.board.profile.laneGrouping);
+    }
+  }, [board.board?.profile?.laneGrouping]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -104,6 +114,15 @@ export function KanbanBoard({ onOpenTicket }: Props) {
     }
   };
 
+  const toggleLane = useCallback((laneKey: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(laneKey)) next.delete(laneKey);
+      else next.add(laneKey);
+      return next;
+    });
+  }, []);
+
   if (board.loading && !board.board) {
     return (
       <div className="flex items-center justify-center h-full text-[12px] text-ink-faint">
@@ -136,13 +155,36 @@ export function KanbanBoard({ onOpenTicket }: Props) {
   }
   if (!board.board) return null;
 
-  const resolvedColumns = resolveColumns(board.board.columns, board.byStatus);
+  const allTickets = board.tickets;
+  if (allTickets.length === 0) {
+    return (
+      <div className="flex flex-col h-full">
+        <BoardToolbar
+          columnMode={columnMode}
+          onColumnModeChange={setColumnMode}
+          density={density}
+          onDensityChange={setDensity}
+          laneGrouping={laneGrouping}
+          onLaneGroupingChange={setLaneGrouping}
+          showEmpty={showEmpty}
+          onShowEmptyChange={setShowEmpty}
+        />
+        <div className="flex-1 flex flex-col items-center justify-center gap-2 px-6 text-center">
+          <p className="text-[13px] text-ink">No tickets match this board.</p>
+          <p className="text-[11.5px] text-ink-faint max-w-[360px]">
+            Try broadening the version filter or removing components.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
-  // QA-only: include only columns whose bucket is ready/testing/done.
-  const visibleColumns =
-    columnMode === "qa"
-      ? resolvedColumns.filter((s) => classifyStatus(s) !== "other")
-      : resolvedColumns;
+  const resolvedColumns: ResolvedColumn[] = resolveBoardColumns({
+    jiraColumns: board.board.columns,
+    byStatus: board.byStatus,
+    mode: columnMode,
+    showEmptyNonQa: showEmpty,
+  });
 
   return (
     <div className="flex flex-col h-full">
@@ -151,30 +193,54 @@ export function KanbanBoard({ onOpenTicket }: Props) {
         onColumnModeChange={setColumnMode}
         density={density}
         onDensityChange={setDensity}
+        laneGrouping={laneGrouping}
+        onLaneGroupingChange={setLaneGrouping}
+        showEmpty={showEmpty}
+        onShowEmptyChange={setShowEmpty}
       />
-      <div className="flex-1 overflow-x-auto">
+      <div className="flex-1 overflow-x-auto overflow-y-auto">
         <DndContext
           sensors={sensors}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
           onDragCancel={() => board.resumePolling()}
         >
-          <div className="flex gap-3 p-3 h-full">
-            {visibleColumns.map((status) => {
-              const dim =
-                columnMode === "all" && classifyStatus(status) === "other";
-              return (
+          {laneGrouping === "none" ? (
+            <div className="flex gap-3 p-3 h-full">
+              {resolvedColumns.map((col) => (
                 <BoardColumn
-                  key={status}
-                  status={status}
-                  tickets={board.byStatus[status] ?? []}
+                  key={col.status}
+                  status={col.status}
+                  tickets={board.byStatus[col.status] ?? []}
                   onOpen={onOpenTicket ?? (() => {})}
                   density={density}
-                  dim={dim}
+                  dim={columnMode === "all" && col.bucket === "other"}
+                  slim={columnMode === "qa" && col.count === 0}
                 />
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="p-3">
+              {groupTicketsByLane(allTickets, laneGrouping).map(
+                (lane, idx) => (
+                  <BoardSwimlane
+                    key={lane.laneKey}
+                    laneKey={lane.laneKey}
+                    laneLabel={lane.laneLabel}
+                    laneIndex={idx}
+                    tickets={lane.tickets}
+                    jiraColumns={board.board!.columns}
+                    mode={columnMode}
+                    showEmptyNonQa={showEmpty}
+                    density={density}
+                    collapsed={collapsed.has(lane.laneKey)}
+                    onToggle={() => toggleLane(lane.laneKey)}
+                    onOpen={onOpenTicket ?? (() => {})}
+                  />
+                ),
+              )}
+            </div>
+          )}
         </DndContext>
       </div>
       {toast && (

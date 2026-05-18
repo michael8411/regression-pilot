@@ -121,6 +121,10 @@ export interface LiveBoardViewPreferences {
   density: LiveBoardDensity;
   /** Restore the last-opened ticket drawer if it still applies. */
   lastOpenedTicketKey: string;
+  /** Phase 13 — show empty non-QA columns when in `all` mode. */
+  showEmptyNonQaColumns?: boolean;
+  /** Phase 13 — collapsed swimlanes by lane key. */
+  collapsedLaneKeys?: string[];
 }
 
 // =============================================================================

@@ -194,6 +194,102 @@ class TestBoardProfileAndViewPrefs:
         assert fresh["view_prefs"]["density"] == "roomy"
 
 
+class TestPhase13ViewPrefsAdditive:
+
+    def test_legacy_board_without_view_prefs_round_trips(self, live_client):
+        # Create with only the minimum payload (no view_prefs at all).
+        bid = live_client.post(
+            "/live/boards", json={"name": "Legacy", "jql": "project = FM"}
+        ).json()["id"]
+        fresh = live_client.get(f"/live/boards/{bid}").json()
+        # Legacy rows return None for view_prefs (no write-back happened).
+        assert fresh["view_prefs"] is None
+
+    def test_show_empty_non_qa_columns_round_trips(self, live_client):
+        bid = live_client.post(
+            "/live/boards",
+            json={
+                "name": "B",
+                "jql": "x",
+                "view_prefs": {
+                    "homeFilter": "",
+                    "boardColumnMode": "all",
+                    "density": "cozy",
+                    "showEmptyNonQaColumns": True,
+                },
+            },
+        ).json()["id"]
+        fresh = live_client.get(f"/live/boards/{bid}").json()
+        assert fresh["view_prefs"]["showEmptyNonQaColumns"] is True
+
+    def test_collapsed_lane_keys_round_trip(self, live_client):
+        bid = live_client.post(
+            "/live/boards",
+            json={
+                "name": "B",
+                "jql": "x",
+                "view_prefs": {
+                    "homeFilter": "",
+                    "boardColumnMode": "qa",
+                    "density": "cozy",
+                    "collapsedLaneKeys": ["FM-1", "FM-2"],
+                },
+            },
+        ).json()["id"]
+        fresh = live_client.get(f"/live/boards/{bid}").json()
+        assert fresh["view_prefs"]["collapsedLaneKeys"] == ["FM-1", "FM-2"]
+
+
+class TestPhase13BoardPreviewLaneKeys:
+
+    def test_preview_returns_lane_keys(self, live_client, monkeypatch):
+        from api import jira_routes
+        from services import jira_service
+
+        async def fake_get_board(jql, fields=None):
+            return {
+                "total": 1,
+                "by_status": {
+                    "In Progress": [
+                        {
+                            "key": "FM-1",
+                            "id": "1",
+                            "summary": "x",
+                            "status": "In Progress",
+                            "issue_type": "Bug",
+                            "priority": "High",
+                            "assignee": "U",
+                            "reporter": "R",
+                            "labels": [],
+                            "components": ["Mobile"],
+                            "fix_versions": [],
+                            "resolution": "",
+                            "created": "",
+                            "updated": "",
+                            "description": "",
+                            "comments": [],
+                            "epic_key": "FM-100",
+                            "parent_key": None,
+                            "component_name": "Mobile",
+                        }
+                    ]
+                },
+                "fetched_at": "2026-05-18T00:00:00Z",
+            }
+
+        monkeypatch.setattr(jira_service, "get_board", fake_get_board)
+
+        app = FastAPI()
+        app.include_router(jira_routes.router)
+        client = TestClient(app)
+        r = client.get("/jira/board?jql=project%20%3D%20FM")
+        assert r.status_code == 200
+        body = r.json()
+        ticket = body["by_status"]["In Progress"][0]
+        assert ticket["epic_key"] == "FM-100"
+        assert ticket["component_name"] == "Mobile"
+
+
 class TestPinsRoutes:
 
     def test_pins_crud(self, live_client):

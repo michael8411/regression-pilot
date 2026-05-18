@@ -5,11 +5,12 @@ import {
   listJiraProjectsForLive,
   listJiraVersionsForLive,
 } from "@/components/live/lib/api";
+import { AUTO_LANE_GROUPING, type LaneGroupingOption } from "./lib/defaultBoardProfile";
 import {
-  AUTO_LANE_GROUPING,
-  DEFAULT_STATUS_OPTIONS,
-  type LaneGroupingOption,
-} from "./lib/defaultBoardProfile";
+  useProjectStatuses,
+  type ProjectStatus,
+} from "./hooks/useProjectStatuses";
+import { classifyStatus, type QaBucket } from "@/components/live/lib/statusTaxonomy";
 import type { JiraProject, JiraVersion } from "@/types";
 
 export interface SimpleBuilderValue {
@@ -26,11 +27,13 @@ export interface SimpleBuilderValue {
 
 interface Props {
   value: SimpleBuilderValue;
-  /** Status options to choose from (detected via preview when available). */
-  statusOptions: string[];
-  /** Optional component names; section hidden when empty. */
   componentOptions?: string[];
   onChange: (next: Partial<SimpleBuilderValue>) => void;
+  /** When provided, render statuses from this discovery hook output. */
+  projectStatuses?: ReadonlyArray<ProjectStatus>;
+  projectStatusesLoading?: boolean;
+  projectStatusesError?: string | null;
+  onProjectStatusesRetry?: () => void;
 }
 
 const LANES: { id: LaneGroupingOption; label: string }[] = [
@@ -50,15 +53,46 @@ const REFRESH_OPTIONS: { sec: number; label: string }[] = [
 
 const MAX_COMPONENTS = 3;
 
+type GroupKey = "ready" | "testing" | "done" | "other";
+const GROUP_LABELS: Record<GroupKey, string> = {
+  ready: "Ready",
+  testing: "Testing",
+  done: "Done",
+  other: "Other",
+};
+
+function groupKey(status: ProjectStatus): GroupKey {
+  const bucket: QaBucket = classifyStatus(status.name);
+  if (bucket !== "other") return bucket;
+  if (status.category === "done") return "done";
+  return "other";
+}
+
 export function SimpleBuilderStep({
   value,
-  statusOptions,
   componentOptions,
   onChange,
+  projectStatuses,
+  projectStatusesLoading,
+  projectStatusesError,
+  onProjectStatusesRetry,
 }: Props) {
   const [projects, setProjects] = useState<JiraProject[]>([]);
   const [versions, setVersions] = useState<JiraVersion[]>([]);
   const [projectsError, setProjectsError] = useState<string | null>(null);
+
+  // Fallback hook for callers (legacy) that don't pass projectStatuses in.
+  const localHook = useProjectStatuses(
+    projectStatuses === undefined ? value.projectKey || null : null,
+  );
+  const statuses = projectStatuses ?? localHook.statuses;
+  const statusesLoading =
+    projectStatusesLoading ?? (projectStatuses === undefined && localHook.loading);
+  const statusesError =
+    projectStatusesError ?? (projectStatuses === undefined ? localHook.error : null);
+  const onRetry =
+    onProjectStatusesRetry ??
+    (projectStatuses === undefined ? localHook.retry : () => {});
 
   useEffect(() => {
     let cancelled = false;
@@ -96,9 +130,6 @@ export function SimpleBuilderStep({
     };
   }, [value.projectKey]);
 
-  const options =
-    statusOptions.length > 0 ? statusOptions : [...DEFAULT_STATUS_OPTIONS];
-
   const toggleStatus = (s: string) => {
     const next = new Set(value.selectedStatuses);
     if (next.has(s)) next.delete(s);
@@ -117,6 +148,19 @@ export function SimpleBuilderStep({
   };
 
   const showComponents = !!componentOptions && componentOptions.length > 0;
+
+  const grouped: Record<GroupKey, ProjectStatus[]> = {
+    ready: [],
+    testing: [],
+    done: [],
+    other: [],
+  };
+  for (const s of statuses) grouped[groupKey(s)].push(s);
+
+  const projectName =
+    projects.find((p) => p.key === value.projectKey)?.key || value.projectKey;
+  const selectedCount = value.selectedStatuses.length;
+  const totalCount = statuses.length;
 
   return (
     <div className="flex flex-col gap-3">
@@ -207,31 +251,69 @@ export function SimpleBuilderStep({
       )}
 
       <Field label="Statuses to track">
-        <div className="flex flex-wrap gap-1.5">
-          {options.map((s) => {
-            const on = value.selectedStatuses.includes(s);
-            return (
-              <button
-                key={s}
-                type="button"
-                onClick={() => toggleStatus(s)}
-                aria-pressed={on}
-                className={clsx(
-                  "h-7 px-2.5 rounded-full text-[11.5px] border transition-colors",
-                  on
-                    ? "bg-accent-dim text-accent-text border-accent/[0.3]"
-                    : "bg-surface-elevated text-ink-muted border-subtle hover:text-ink hover:border-muted",
-                )}
-              >
-                {s}
-              </button>
-            );
-          })}
-        </div>
-        <p className="mt-1 text-[10.5px] text-ink-faint">
-          Pick the Jira statuses this board should show. Defaults are
-          QA-focused.
-        </p>
+        {!value.projectKey ? (
+          <p className="text-[11px] text-ink-faint">
+            Pick a project to see its real statuses.
+          </p>
+        ) : statusesError ? (
+          <div className="flex items-center justify-between rounded-md border border-err/30 bg-err/10 px-2.5 py-1.5">
+            <span className="text-[11px] text-err truncate">
+              {statusesError}
+            </span>
+            <button
+              type="button"
+              onClick={onRetry}
+              className="g-btn text-[11px] px-2 py-1 ml-2"
+            >
+              Retry
+            </button>
+          </div>
+        ) : statusesLoading && statuses.length === 0 ? (
+          <p className="text-[11px] text-ink-faint">Loading workflow…</p>
+        ) : statuses.length === 0 ? (
+          <p className="text-[11px] text-ink-faint">
+            This project's workflow returned no statuses.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {(["ready", "testing", "done", "other"] as GroupKey[]).map((g) =>
+              grouped[g].length === 0 ? null : (
+                <div key={g}>
+                  <span className="block text-[10px] uppercase tracking-wider text-ink-faint font-mono mb-1">
+                    {GROUP_LABELS[g]}
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {grouped[g].map((s) => {
+                      const on = value.selectedStatuses.includes(s.name);
+                      return (
+                        <button
+                          key={s.name}
+                          type="button"
+                          onClick={() => toggleStatus(s.name)}
+                          aria-pressed={on}
+                          className={clsx(
+                            "h-7 px-2.5 rounded-full text-[11.5px] border transition-colors",
+                            on
+                              ? "bg-accent-dim text-accent-text border-accent/[0.3]"
+                              : "bg-surface-elevated text-ink-muted border-subtle hover:text-ink hover:border-muted",
+                          )}
+                        >
+                          {s.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ),
+            )}
+          </div>
+        )}
+        {totalCount > 0 && (
+          <p className="mt-2 text-[10.5px] text-ink-faint">
+            Selected {selectedCount} of {totalCount} statuses returned by{" "}
+            {projectName} workflow.
+          </p>
+        )}
       </Field>
 
       <div className="grid grid-cols-2 gap-3">

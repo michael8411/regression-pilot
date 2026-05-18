@@ -1,3 +1,5 @@
+import { classifyStatus } from "@/components/live/lib/statusTaxonomy";
+import type { ProjectStatus } from "../hooks/useProjectStatuses";
 import type {
   LiveBoardProfile,
   LiveBoardViewPreferences,
@@ -52,21 +54,41 @@ export function defaultBoardProfile(
   projectKey: string,
   versionName: string = "",
 ): LiveBoardProfile {
+  // selectedStatuses + qaStatusMap are seeded from the project's real
+  // workflow once `useProjectStatuses` resolves; we never pre-fill them
+  // from a hardcoded list (Phase 13 §0).
   return {
     builderMode: "simple",
     projectKey: projectKey.trim(),
     versionName: versionName.trim(),
-    selectedStatuses: [...DEFAULT_STATUS_OPTIONS],
-    qaStatusMap: {
-      ready: [...DEFAULT_READY_STATUSES],
-      testing: [...DEFAULT_TESTING_STATUSES],
-      done: [...DEFAULT_DONE_STATUSES],
-    },
+    selectedStatuses: [],
+    qaStatusMap: { ready: [], testing: [], done: [] },
     laneGrouping: "none",
     assigneeScope: "anyone",
     refreshIntervalSec: DEFAULT_REFRESH_INTERVAL_SEC,
     customJql: "",
   };
+}
+
+/**
+ * Phase 13 §1.2 — derive the default selection from the project's real
+ * statuses (not the static vocabulary).
+ */
+export function smartDefaultSelectedStatuses(
+  statuses: ReadonlyArray<ProjectStatus>,
+): string[] {
+  if (statuses.length === 0) return [];
+  const primary = statuses.filter((s) => {
+    const bucket = classifyStatus(s.name);
+    return (
+      bucket === "ready" || bucket === "testing" || s.category === "done"
+    );
+  });
+  if (primary.length >= 2) return primary.map((s) => s.name);
+  const indeterminateOrDone = statuses.filter(
+    (s) => s.category === "indeterminate" || s.category === "done",
+  );
+  return indeterminateOrDone.map((s) => s.name);
 }
 
 export function defaultViewPrefs(): LiveBoardViewPreferences {

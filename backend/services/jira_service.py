@@ -47,6 +47,62 @@ async def get_projects() -> list[dict]:
         ]
 
 
+_PROJECT_STATUSES_CACHE: dict[str, tuple[float, list[dict]]] = {}
+_PROJECT_STATUSES_TTL_S = 300.0
+
+
+class JiraUnavailableError(RuntimeError):
+    pass
+
+
+class JiraNotFoundError(RuntimeError):
+    pass
+
+
+async def get_project_statuses(project_key: str) -> list[dict]:
+    import time
+
+    now = time.monotonic()
+    cached = _PROJECT_STATUSES_CACHE.get(project_key)
+    if cached and now - cached[0] < _PROJECT_STATUSES_TTL_S:
+        return cached[1]
+
+    async with await _client() as client:
+        resp = await client.get(
+            f"{_base_url()}/rest/api/3/project/{project_key}/statuses"
+        )
+        if resp.status_code == 404:
+            raise JiraNotFoundError(project_key)
+        if resp.status_code == 429 or resp.status_code >= 500:
+            raise JiraUnavailableError(f"jira responded {resp.status_code}")
+        resp.raise_for_status()
+        raw = resp.json()
+
+    accumulator: dict[str, dict] = {}
+    for issue_type_entry in raw:
+        type_name = issue_type_entry.get("name") or ""
+        for status in issue_type_entry.get("statuses", []) or []:
+            name = status.get("name")
+            if not name:
+                continue
+            category = (
+                (status.get("statusCategory") or {}).get("key") or "indeterminate"
+            )
+            entry = accumulator.get(name)
+            if entry is None:
+                accumulator[name] = {
+                    "name": name,
+                    "category": category,
+                    "issue_types": [type_name] if type_name else [],
+                }
+            elif type_name and type_name not in entry["issue_types"]:
+                entry["issue_types"].append(type_name)
+
+    ordered = sorted(accumulator.values(), key=lambda r: r["name"].lower())
+    _PROJECT_STATUSES_CACHE[project_key] = (now, ordered)
+    return ordered
+
+
 async def get_components(project_key: str) -> list[dict]:
     async with await _client() as client:
         resp = await client.get(

@@ -88,6 +88,19 @@ describe("resolveBoardColumns", () => {
     expect(leading[0].status).toBe("In Testing");
   });
 
+  it("drops ghost columns: saved-profile statuses absent from response", () => {
+    const cols = resolveBoardColumns({
+      // Saved profile lists Resolved + a real one. Response only has the real one.
+      jiraColumns: ["Resolved", "Ready for QA"],
+      byStatus: {
+        "Ready for QA": [tk("A-1", "Ready for QA")],
+      },
+      mode: "qa",
+      showEmptyNonQa: false,
+    });
+    expect(cols.map((c) => c.status)).toEqual(["Ready for QA"]);
+  });
+
   it("keeps Done and Closed as sibling columns", () => {
     const cols = resolveBoardColumns({
       jiraColumns: ["Done", "Closed"],

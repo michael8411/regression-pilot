@@ -1,5 +1,6 @@
 import structlog
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 
 try:
     from backend.schemas.request_models import TicketKeysRequest
@@ -73,6 +74,27 @@ async def list_components(project_key: str):
         return await jira_service.get_components(project_key)
     except Exception as e:
         raise upstream_error("Jira API", e)
+
+
+@router.get("/projects/{project_key}/statuses")
+async def list_project_statuses(project_key: str):
+    from datetime import datetime, timezone
+
+    try:
+        statuses = await jira_service.get_project_statuses(project_key)
+    except jira_service.JiraNotFoundError:
+        return JSONResponse(
+            status_code=404, content={"error": "project_not_found"}
+        )
+    except jira_service.JiraUnavailableError:
+        return JSONResponse(
+            status_code=502, content={"error": "jira_unavailable"}
+        )
+    return {
+        "project_key": project_key,
+        "statuses": statuses,
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 @router.get("/tickets")

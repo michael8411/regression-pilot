@@ -112,6 +112,7 @@ export interface LiveBoardProfile {
 
 export type LiveBoardColumnMode = "all" | "qa";
 export type LiveBoardDensity = "compact" | "cozy" | "roomy";
+export type LiveBoardBuilderUiMode = "quick" | "advanced";
 
 export interface LiveBoardViewPreferences {
   /** Filter selection on Live home (free-form text/preset). */

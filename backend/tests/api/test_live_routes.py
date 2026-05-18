@@ -240,6 +240,69 @@ class TestPhase13ViewPrefsAdditive:
         assert fresh["view_prefs"]["collapsedLaneKeys"] == ["FM-1", "FM-2"]
 
 
+class TestPhase13ProjectStatusesRoute:
+
+    @pytest.fixture
+    def jira_client(self, fake_keyring, monkeypatch):
+        from api import jira_routes
+
+        app = FastAPI()
+        app.include_router(jira_routes.router)
+        return TestClient(app)
+
+    def setup_method(self):
+        from services import jira_service
+
+        jira_service._PROJECT_STATUSES_CACHE.clear()
+
+    def test_returns_response_shape(self, jira_client, monkeypatch):
+        from services import jira_service
+
+        async def fake_get(*_a, **_k):
+            return [
+                {
+                    "name": "Done",
+                    "category": "done",
+                    "issue_types": ["Story", "Bug"],
+                },
+                {
+                    "name": "In Progress",
+                    "category": "indeterminate",
+                    "issue_types": ["Story"],
+                },
+            ]
+
+        monkeypatch.setattr(jira_service, "get_project_statuses", fake_get)
+        r = jira_client.get("/jira/projects/FM/statuses")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["project_key"] == "FM"
+        assert body["statuses"][0]["name"] == "Done"
+        assert body["fetched_at"]
+
+    def test_unknown_project_returns_404(self, jira_client, monkeypatch):
+        from services import jira_service
+
+        async def boom(*_a, **_k):
+            raise jira_service.JiraNotFoundError("BAD")
+
+        monkeypatch.setattr(jira_service, "get_project_statuses", boom)
+        r = jira_client.get("/jira/projects/BAD/statuses")
+        assert r.status_code == 404
+        assert r.json() == {"error": "project_not_found"}
+
+    def test_jira_5xx_returns_502(self, jira_client, monkeypatch):
+        from services import jira_service
+
+        async def boom(*_a, **_k):
+            raise jira_service.JiraUnavailableError("503")
+
+        monkeypatch.setattr(jira_service, "get_project_statuses", boom)
+        r = jira_client.get("/jira/projects/FM/statuses")
+        assert r.status_code == 502
+        assert r.json() == {"error": "jira_unavailable"}
+
+
 class TestPhase13BoardPreviewLaneKeys:
 
     def test_preview_returns_lane_keys(self, live_client, monkeypatch):

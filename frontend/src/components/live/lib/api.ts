@@ -99,6 +99,26 @@ export async function listJiraComponentsForLive(
   return rows.map((r) => r.name).filter(Boolean);
 }
 
+export interface JiraProjectStatusRow {
+  name: string;
+  category: "new" | "indeterminate" | "done";
+  issue_types: string[];
+}
+
+export interface JiraProjectStatusesResponse {
+  project_key: string;
+  statuses: JiraProjectStatusRow[];
+  fetched_at: string;
+}
+
+export function getJiraProjectStatuses(
+  projectKey: string,
+): Promise<JiraProjectStatusesResponse> {
+  return jfetch(
+    `/jira/projects/${encodeURIComponent(projectKey)}/statuses`,
+  );
+}
+
 // Comments
 export function postJiraComment(
   ticketKey: string,

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   defaultBoardProfile,
   defaultViewPrefs,
-  DEFAULT_STATUS_OPTIONS,
+  smartDefaultSelectedStatuses,
   DEFAULT_REFRESH_INTERVAL_SEC,
 } from "../defaultBoardProfile";
 
@@ -15,7 +15,12 @@ describe("defaultBoardProfile", () => {
     expect(p.assigneeScope).toBe("anyone");
     expect(p.laneGrouping).toBe("none");
     expect(p.refreshIntervalSec).toBe(DEFAULT_REFRESH_INTERVAL_SEC);
-    expect(p.selectedStatuses).toEqual([...DEFAULT_STATUS_OPTIONS]);
+  });
+
+  it("seeds selectedStatuses + qaStatusMap as empty (filled from real workflow)", () => {
+    const p = defaultBoardProfile("FM");
+    expect(p.selectedStatuses).toEqual([]);
+    expect(p.qaStatusMap).toEqual({ ready: [], testing: [], done: [] });
   });
 
   it("trims project + version", () => {
@@ -30,18 +35,34 @@ describe("defaultBoardProfile", () => {
     a.selectedStatuses.push("X");
     expect(b.selectedStatuses).not.toContain("X");
   });
+});
 
-  it("auto qa map covers ready/testing/done with zero other on first render", () => {
-    const p = defaultBoardProfile("FM");
-    for (const s of p.qaStatusMap.ready) {
-      expect(DEFAULT_STATUS_OPTIONS).toContain(s);
-    }
-    for (const s of p.qaStatusMap.testing) {
-      expect(DEFAULT_STATUS_OPTIONS).toContain(s);
-    }
-    for (const s of p.qaStatusMap.done) {
-      expect(DEFAULT_STATUS_OPTIONS).toContain(s);
-    }
+describe("smartDefaultSelectedStatuses", () => {
+  it("selects taxonomy-known QA statuses and done-category statuses", () => {
+    const out = smartDefaultSelectedStatuses([
+      { name: "Open", category: "new", issueTypes: [] },
+      { name: "Ready for QA", category: "indeterminate", issueTypes: [] },
+      { name: "In Testing", category: "indeterminate", issueTypes: [] },
+      { name: "Done", category: "done", issueTypes: [] },
+    ]);
+    expect(out).toEqual(["Ready for QA", "In Testing", "Done"]);
+  });
+
+  it("expands to indeterminate + done when fewer than 2 are taxonomy-known", () => {
+    const out = smartDefaultSelectedStatuses([
+      { name: "Open", category: "new", issueTypes: [] },
+      { name: "In Progress", category: "indeterminate", issueTypes: [] },
+      { name: "Done", category: "done", issueTypes: [] },
+    ]);
+    // Only "Done" is taxonomy-known (category=done). One item < 2, so we
+    // expand to every indeterminate/done status.
+    expect(out).toContain("In Progress");
+    expect(out).toContain("Done");
+    expect(out).not.toContain("Open");
+  });
+
+  it("returns empty for empty input", () => {
+    expect(smartDefaultSelectedStatuses([])).toEqual([]);
   });
 });
 

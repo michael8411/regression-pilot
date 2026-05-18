@@ -263,6 +263,127 @@ class TestExtractLaneKeys:
         assert out["epic_key"] == "ALT-1"
 
 
+class TestGetProjectStatuses:
+
+    def setup_method(self):
+        from services import jira_service
+
+        jira_service._PROJECT_STATUSES_CACHE.clear()
+
+    def _set_response(self, monkeypatch, status_code, payload):
+        from services import jira_service
+
+        class FakeResp:
+            def __init__(self):
+                self.status_code = status_code
+
+            def raise_for_status(self):
+                if status_code >= 400:
+                    raise RuntimeError(f"http {status_code}")
+
+            def json(self):
+                return payload
+
+        class FakeClient:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                return None
+
+            async def get(self, *_a, **_k):
+                return FakeResp()
+
+        async def fake_client():
+            return FakeClient()
+
+        monkeypatch.setattr(jira_service, "_client", fake_client)
+
+    def test_dedupes_across_issue_types(self, live_service, monkeypatch):
+        from services import jira_service
+
+        self._set_response(
+            monkeypatch,
+            200,
+            [
+                {
+                    "name": "Story",
+                    "statuses": [
+                        {
+                            "name": "In Progress",
+                            "statusCategory": {"key": "indeterminate"},
+                        },
+                        {
+                            "name": "Done",
+                            "statusCategory": {"key": "done"},
+                        },
+                    ],
+                },
+                {
+                    "name": "Bug",
+                    "statuses": [
+                        {
+                            "name": "In Progress",
+                            "statusCategory": {"key": "indeterminate"},
+                        },
+                        {
+                            "name": "Ready for QA",
+                            "statusCategory": {"key": "indeterminate"},
+                        },
+                    ],
+                },
+            ],
+        )
+        out = _run(jira_service.get_project_statuses("FM"))
+        names = [s["name"] for s in out]
+        assert names == sorted(names, key=str.lower)
+        assert names.count("In Progress") == 1
+        in_progress = next(s for s in out if s["name"] == "In Progress")
+        assert set(in_progress["issue_types"]) == {"Story", "Bug"}
+
+    def test_returns_categories(self, live_service, monkeypatch):
+        from services import jira_service
+
+        self._set_response(
+            monkeypatch,
+            200,
+            [
+                {
+                    "name": "Story",
+                    "statuses": [
+                        {"name": "Open", "statusCategory": {"key": "new"}},
+                        {
+                            "name": "In Progress",
+                            "statusCategory": {"key": "indeterminate"},
+                        },
+                        {"name": "Done", "statusCategory": {"key": "done"}},
+                    ],
+                }
+            ],
+        )
+        out = _run(jira_service.get_project_statuses("FM"))
+        cats = {s["name"]: s["category"] for s in out}
+        assert cats["Open"] == "new"
+        assert cats["In Progress"] == "indeterminate"
+        assert cats["Done"] == "done"
+
+    def test_unknown_project_raises_not_found(
+        self, live_service, monkeypatch
+    ):
+        from services import jira_service
+
+        self._set_response(monkeypatch, 404, [])
+        with pytest.raises(jira_service.JiraNotFoundError):
+            _run(jira_service.get_project_statuses("BAD"))
+
+    def test_jira_5xx_raises_unavailable(self, live_service, monkeypatch):
+        from services import jira_service
+
+        self._set_response(monkeypatch, 503, [])
+        with pytest.raises(jira_service.JiraUnavailableError):
+            _run(jira_service.get_project_statuses("FM"))
+
+
 class TestCorruption:
 
     def test_corrupted_jql_returns_empty_string(self, live_service):

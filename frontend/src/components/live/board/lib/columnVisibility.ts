@@ -27,9 +27,11 @@ function readingOrderIndex(status: string): number {
 export function resolveBoardColumns(args: ResolveColumnsArgs): ResolvedColumn[] {
   const { jiraColumns, byStatus, mode, showEmptyNonQa, qaStatusOverride } = args;
 
-  const knownStatuses = new Set<string>();
-  for (const s of jiraColumns) knownStatuses.add(s);
-  for (const s of Object.keys(byStatus)) knownStatuses.add(s);
+  // Phase 13 §2.2 — only render statuses present in the current board
+  // response. Saved-profile statuses the workflow no longer returns are
+  // silently dropped (no ghost columns).
+  void jiraColumns;
+  const knownStatuses = new Set<string>(Object.keys(byStatus));
 
   // Collapse synonymous statuses: keep the first canonical occurrence per
   // bucket+canonical-name pair. Two statuses are "synonyms" only when they

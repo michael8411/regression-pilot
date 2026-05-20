@@ -82,6 +82,26 @@ export function useSession() {
     };
   }, []);
 
+  const refreshActiveSession = useCallback(async (): Promise<void> => {
+    setIsRestoring(true);
+    try {
+      const session = await getActiveSession();
+      const safeState =
+        session.state && typeof session.state === "object" && !Array.isArray(session.state)
+          ? session.state
+          : {};
+      sessionIdRef.current = session.id;
+      setSessionId(session.id);
+      setRestoredState(safeState);
+    } catch {
+      sessionIdRef.current = null;
+      setSessionId(null);
+      setRestoredState({});
+    } finally {
+      setIsRestoring(false);
+    }
+  }, []);
+
   const createSession = useCallback(
     async (projectKey: string, versionName?: string): Promise<void> => {
       const session = await createSessionApi(projectKey, versionName);
@@ -183,6 +203,7 @@ export function useSession() {
     restoredState,
     isRestoring,
     createSession,
+    refreshActiveSession,
     saveState,
     saveStateImmediate,
     saveStateBatch,

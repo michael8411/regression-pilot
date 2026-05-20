@@ -1,0 +1,27 @@
+html, body {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    system-ui, sans-serif;
+  font-feature-settings: "tnum" 1, "cv11" 1, "ss01" 1;
+}
+
+.mono {
+  font-family: "IBM Plex Mono", "SF Mono", ui-monospace, monospace;
+  font-feature-settings: "tnum" 1;
+}
+
+.t-label  { font-size: 9px;   line-height: 14px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.15em;  color: var(--ink-muted); }
+.t-meta   { font-size: 11px;  line-height: 16px; font-weight: 400; }
+.t-nav    { font-size: 12.5px;line-height: 18px; font-weight: 500; }
+.t-body   { font-size: 13px;  line-height: 20px; font-weight: 400; }
+.t-title  { font-size: 14px;  line-height: 22px; font-weight: 500; }
+.t-h2     { font-size: 16px;  line-height: 24px; font-weight: 600; }
+.t-h1     { font-size: 20px;  line-height: 28px; font-weight: 600; letter-spacing: -0.01em; }
+.t-hero   { font-size: 28px;  line-height: 36px; font-weight: 700; letter-spacing: -0.02em; }
+
+/* Tabular numbers — use on any number-dominant row (tickets count, dates, sizes) */
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* Clamp helpers — used in kanban cards and long titles */
+.clamp1 { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
+.clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.clamp3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }

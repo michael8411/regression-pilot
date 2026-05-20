@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { SetupView } from "@/components/SetupView";
 import { SelectView } from "@/components/SelectView";
@@ -8,6 +8,44 @@ import { ChatView } from "@/components/ChatView";
 import { useSession } from "@/hooks/useSession";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AppView, ChatMessage, ConfigStatus, JiraTicket, PushResult, TestCase } from "@/types";
+import {
+  AppShell,
+  CommandPalette,
+  coreCommands,
+  useGlobalCommandShortcut,
+  useRegisterCommands,
+} from "@/components/shell";
+import {
+  RegressionHome,
+  TicketWorkbench,
+  ThemeEditor,
+  GenerateCases,
+  ReviewGrid,
+  PushDialog,
+} from "@/components/regression";
+import { HistoryDrawer } from "@/components/history";
+import { SetupWizard } from "@/components/onboarding";
+import { AssistantWorkspace } from "@/components/assistant";
+import { LiveWorkspace } from "@/components/live";
+import { requestOpenCreateDialog as requestOpenMcpDialog } from "@/components/mcp";
+import { SettingsOverlay } from "@/components/settings";
+import { CyclesView } from "@/components/cycles";
+import { getConfigStatus } from "@/lib/api";
+import { RouteProvider, useRoute } from "@/contexts/RouteContext";
+import {
+  CommandRegistryProvider,
+  useCommandRegistry,
+} from "@/contexts/CommandRegistryContext";
+import { isFeatureEnabled } from "@/lib/featureFlags";
+import {
+  buildCrumbs,
+  legacyViewToRoute,
+  mapRouteToLegacyView,
+  parseRoute,
+  type RegressionScreen as RegressionScreenName,
+  type Route,
+  type SessionChipData,
+} from "@/types/routing";
 
 const VALID_VIEWS: AppView[] = ["setup", "select", "generate", "review", "chat"];
 
@@ -28,9 +66,34 @@ function validateRestoredView(
   return candidate as AppView;
 }
 
+interface ScreenHandlers {
+  // Setup
+  onStatusResolved: (status: ConfigStatus) => void;
+  // Select
+  onTicketsSelected: (tickets: JiraTicket[], versionName?: string) => Promise<void>;
+  saveState: (key: string, value: unknown) => void;
+  // Generate
+  tickets: JiraTicket[];
+  onGenerated: (cases: TestCase[]) => void;
+  onBackFromGenerate: () => void;
+  initialInstructions?: string;
+  initialGroups?: Record<string, JiraTicket[]>;
+  // Review
+  testCases: TestCase[];
+  projectKey: string;
+  onBackFromReview: () => void;
+  onUpdateTestCases: (cases: TestCase[]) => void;
+  saveStateImmediate: (key: string, value: unknown) => Promise<void>;
+  initialPushResult?: PushResult;
+  // Chat
+  initialMessages?: ChatMessage[];
+}
+
 export default function App() {
   const [view, setView] = useState<AppView>("setup");
   const [jiraReady, setJiraReady] = useState(false);
+  const [geminiReady, setGeminiReady] = useState(false);
+  const [zephyrReady, setZephyrReady] = useState(false);
   const [selectedTickets, setSelectedTickets] = useState<JiraTicket[]>([]);
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [projectKey, setProjectKey] = useState("FM");
@@ -38,6 +101,10 @@ export default function App() {
   const [hasAutoRedirected, setHasAutoRedirected] = useState<boolean>(false);
   const [manualSetupOpen, setManualSetupOpen] = useState<boolean>(false);
   const [version, setVersion] = useState<string>("…");
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
+
+  const useNewShell = isFeatureEnabled("workspaceSwitcher");
 
   const hasRestoredRef = useRef(false);
 
@@ -50,6 +117,20 @@ export default function App() {
     saveStateImmediate,
     saveStateBatch,
   } = useSession();
+
+  useEffect(() => {
+    if (!isFeatureEnabled("onboardingV2")) return;
+    let cancelled = false;
+    getConfigStatus()
+      .then((s) => {
+        if (cancelled) return;
+        const firstRun = !s.jira.configured && !s.ai.configured;
+        const skipped = localStorage.getItem("onboarding.skipped") === "true";
+        if (firstRun && !skipped) setWizardOpen(true);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     fetch("http://localhost:8000/health")
@@ -93,6 +174,23 @@ export default function App() {
     }
   }, [restoredState]);
 
+  const initialRoute = useMemo<Route>(() => {
+    if (!restoredState) return ["regression", "home"];
+    const restored = parseRoute(restoredState.currentRoute);
+    if (restored) return restored;
+    return legacyViewToRoute(restoredState.currentView as AppView | undefined)
+      ?? ["regression", "home"];
+  }, [restoredState]);
+
+  const handleRouteChange = useCallback(
+    (next: Route) => {
+      saveState("currentRoute", next);
+      const legacy = mapRouteToLegacyView(next);
+      if (legacy) saveState("currentView", legacy);
+    },
+    [saveState],
+  );
+
   if (isRestoring) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -103,6 +201,8 @@ export default function App() {
 
   const handleStatusResolved = (status: ConfigStatus) => {
     setJiraReady(status.jira.configured);
+    setGeminiReady(status.ai.configured);
+    setZephyrReady(status.zephyr.configured);
 
     if (status.jira.configured && !hasAutoRedirected && !manualSetupOpen) {
       setView("select");
@@ -122,7 +222,7 @@ export default function App() {
   ) => {
     const key = tickets.length > 0 ? tickets[0].key.split("-")[0] : projectKey;
     const resolvedVersion = versionName ?? null;
-    
+
     const needsNewSession =
       !sessionId ||
       key !== projectKey ||
@@ -161,64 +261,375 @@ export default function App() {
       ? (restoredState.editableGroups as Record<string, JiraTicket[]>)
       : undefined;
 
+  const handlers: ScreenHandlers = {
+    onStatusResolved: handleStatusResolved,
+    onTicketsSelected: handleTicketsSelected,
+    saveState,
+    tickets: selectedTickets,
+    onGenerated: handleGenerated,
+    onBackFromGenerate: () => setView("select"),
+    initialInstructions: restoredState?.instructions as string | undefined,
+    initialGroups: restoredGroups,
+    testCases,
+    projectKey,
+    onBackFromReview: () => setView("generate"),
+    onUpdateTestCases: setTestCases,
+    saveStateImmediate,
+    initialPushResult: restoredState?.pushResult as PushResult | undefined,
+    initialMessages: restoredState?.chatMessages as ChatMessage[] | undefined,
+  };
+
+  const sessionChip: SessionChipData | null =
+    selectedTickets.length > 0 && currentVersionName
+      ? {
+          project: projectKey,
+          version: currentVersionName,
+          ticketCount: selectedTickets.length,
+          themeCount: restoredGroups ? Object.keys(restoredGroups).length : 0,
+          lastSavedAt: null,
+        }
+      : null;
+
+  if (!useNewShell) {
+    return (
+      <div className="flex h-full">
+        <div className="bg-scene" />
+
+        <Sidebar
+          currentView={view}
+          onNavigate={handleNavigate}
+          jiraReady={jiraReady}
+          version={version}
+          hasTickets={selectedTickets.length > 0}
+          hasTestCases={testCases.length > 0}
+        />
+
+        <main className="flex overflow-hidden flex-col flex-1">
+          <V1TitleBar />
+
+          {view === "setup" && (
+            <SetupView onStatusResolved={handleStatusResolved} />
+          )}
+          {view === "select" && (
+            <SelectView
+              onTicketsSelected={handleTicketsSelected}
+              saveState={saveState}
+            />
+          )}
+          {view === "generate" && (
+            <GenerateView
+              tickets={selectedTickets}
+              onGenerated={handleGenerated}
+              onBack={() => setView("select")}
+              saveState={saveState}
+              initialInstructions={restoredState?.instructions as string | undefined}
+              initialGroups={restoredGroups}
+            />
+          )}
+          {view === "review" && (
+            <ReviewView
+              testCases={testCases}
+              projectKey={projectKey}
+              onBack={() => setView("generate")}
+              onUpdateTestCases={setTestCases}
+              saveStateImmediate={saveStateImmediate}
+              initialPushResult={restoredState?.pushResult as PushResult | undefined}
+            />
+          )}
+          {view === "chat" && (
+            <ChatView
+              tickets={selectedTickets}
+              saveStateImmediate={saveStateImmediate}
+              initialMessages={restoredState?.chatMessages as ChatMessage[] | undefined}
+            />
+          )}
+        </main>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex h-full">
-      <div className="bg-scene" />
+    <CommandRegistryProvider>
+      <RouteProvider initialRoute={initialRoute} onRouteChange={handleRouteChange}>
+        <ShellCommandsBridge />
+        <CoreCommandsBridge
+          onOpenHistory={() => setHistoryOpen(true)}
+          onOpenSetup={() => {
+            localStorage.removeItem("onboarding.skipped");
+            setWizardOpen(true);
+          }}
+        />
+        <ShellBridge
+          handlers={handlers}
+          session={sessionChip}
+          jiraReady={jiraReady}
+          geminiReady={geminiReady}
+          zephyrReady={zephyrReady}
+          version={version}
+          modelName="Gemini 2.5 Flash"
+          onOpenHistory={() => setHistoryOpen(true)}
+        />
+        <CommandPaletteHost />
+        {isFeatureEnabled("historyDrawer") && (
+          <HistoryDrawer
+            open={historyOpen}
+            onClose={() => setHistoryOpen(false)}
+          />
+        )}
+        {isFeatureEnabled("onboardingV2") && (
+          <SetupWizard
+            open={wizardOpen}
+            onClose={() => {
+              localStorage.setItem("onboarding.skipped", "true");
+              setWizardOpen(false);
+            }}
+            onFinish={() => {
+              localStorage.removeItem("onboarding.skipped");
+              setWizardOpen(false);
+            }}
+          />
+        )}
+        {isFeatureEnabled("settingsV2") && <SettingsOverlay />}
+      </RouteProvider>
+    </CommandRegistryProvider>
+  );
+}
 
-      <Sidebar
-        currentView={view}
-        onNavigate={handleNavigate}
-        jiraReady={jiraReady}
-        version={version}
-        hasTickets={selectedTickets.length > 0}
-        hasTestCases={testCases.length > 0}
+function ShellCommandsBridge() {
+  useGlobalCommandShortcut();
+  return null;
+}
+
+function CoreCommandsBridge({
+  onOpenHistory,
+  onOpenSetup,
+}: {
+  onOpenHistory: () => void;
+  onOpenSetup: () => void;
+}) {
+  const { gotoSettings, gotoSettingsPane } = useRoute();
+  const onOpenSettings = useCallback(() => gotoSettings(), [gotoSettings]);
+  const onOpenSettingsPane = useCallback(
+    (pane: string) => gotoSettingsPane(pane),
+    [gotoSettingsPane],
+  );
+  const onAddMcpConnection = useCallback(() => {
+    requestOpenMcpDialog();
+    gotoSettingsPane("connections");
+  }, [gotoSettingsPane]);
+
+  const commands = useMemo(
+    () =>
+      coreCommands({
+        onOpenSettings,
+        onOpenHistory,
+        onOpenSetup,
+        onOpenSettingsPane,
+        onAddMcpConnection,
+      }),
+    [
+      onOpenSettings,
+      onOpenHistory,
+      onOpenSetup,
+      onOpenSettingsPane,
+      onAddMcpConnection,
+    ],
+  );
+  useRegisterCommands(commands);
+  return null;
+}
+
+function CommandPaletteHost() {
+  const { open, closePalette } = useCommandRegistry();
+  if (!isFeatureEnabled("commandPalette")) return null;
+  return <CommandPalette open={open} onClose={closePalette} />;
+}
+
+interface ShellBridgeProps {
+  handlers: ScreenHandlers;
+  session: SessionChipData | null;
+  jiraReady: boolean;
+  geminiReady: boolean;
+  zephyrReady: boolean;
+  version: string;
+  modelName: string;
+  onOpenHistory: () => void;
+}
+
+function ShellBridge({
+  handlers,
+  session,
+  jiraReady,
+  geminiReady,
+  zephyrReady,
+  version,
+  modelName,
+  onOpenHistory,
+}: ShellBridgeProps) {
+  const { route, gotoSettings } = useRoute();
+  const { openPalette } = useCommandRegistry();
+  const crumbs = useMemo(() => buildCrumbs(route), [route]);
+
+  return (
+    <AppShell
+      crumbs={crumbs}
+      session={session}
+      jiraReady={jiraReady}
+      geminiReady={geminiReady}
+      zephyrReady={zephyrReady}
+      version={version}
+      modelName={modelName}
+      onOpenHistory={onOpenHistory}
+      onOpenSettings={() => gotoSettings()}
+      onCmdK={openPalette}
+      onOpenProfile={() => {
+        /* Later phase. */
+      }}
+    >
+      <CurrentScreen handlers={handlers} />
+    </AppShell>
+  );
+}
+
+function CurrentScreen({ handlers }: { handlers: ScreenHandlers }) {
+  const { route } = useRoute();
+  const ws = route[0];
+
+  if (ws === "regression") {
+    return <RegressionScreen screen={route[1]} handlers={handlers} />;
+  }
+
+  if (ws === "live") {
+    if (isFeatureEnabled("liveTestingV2")) {
+      return <LiveWorkspace />;
+    }
+    return (
+      <div className="p-8 text-center text-[12px] text-ink-faint">
+        Live Testing isn't enabled.
+      </div>
+    );
+  }
+
+  if (ws === "assistant") {
+    if (isFeatureEnabled("assistantV2")) {
+      return <AssistantWorkspace />;
+    }
+    return (
+      <ChatView
+        tickets={handlers.tickets}
+        saveStateImmediate={handlers.saveStateImmediate}
+        initialMessages={handlers.initialMessages}
       />
+    );
+  }
 
-      <main className="flex overflow-hidden flex-col flex-1">
-        <TitleBar />
+  if (ws === "settings") {
+    return <ComingSoon label="Settings" description="Shipping in Phase 11." />;
+  }
 
-        {view === "setup" && (
-          <SetupView onStatusResolved={handleStatusResolved} />
-        )}
-        {view === "select" && (
-          <SelectView
-            onTicketsSelected={handleTicketsSelected}
-            saveState={saveState}
-          />
-        )}
-        {view === "generate" && (
-          <GenerateView
-            tickets={selectedTickets}
-            onGenerated={handleGenerated}
-            onBack={() => setView("select")}
-            saveState={saveState}
-            initialInstructions={restoredState?.instructions as string | undefined}
-            initialGroups={restoredGroups}
-          />
-        )}
-        {view === "review" && (
-          <ReviewView
-            testCases={testCases}
-            projectKey={projectKey}
-            onBack={() => setView("generate")}
-            onUpdateTestCases={setTestCases}
-            saveStateImmediate={saveStateImmediate}
-            initialPushResult={restoredState?.pushResult as PushResult | undefined}
-          />
-        )}
-        {view === "chat" && (
-          <ChatView
-            tickets={selectedTickets}
-            saveStateImmediate={saveStateImmediate}
-            initialMessages={restoredState?.chatMessages as ChatMessage[] | undefined}
-          />
-        )}
-      </main>
+  if (ws === "onboarding") {
+    return <ComingSoon label="Onboarding" description="Shipping in Phase 6." />;
+  }
+
+  return <ComingSoon label="History" description="Shipping in Phase 5." />;
+}
+
+function RegressionScreen({
+  screen,
+  handlers,
+}: {
+  screen: RegressionScreenName;
+  handlers: ScreenHandlers;
+}) {
+  if (!isFeatureEnabled("regressionV2")) {
+    return <LegacyRegressionScreen screen={screen} handlers={handlers} />;
+  }
+  switch (screen) {
+    case "home":
+      return <RegressionHome />;
+    case "workbench":
+      return <TicketWorkbench />;
+    case "themes":
+      return <ThemeEditor />;
+    case "generate":
+      return <GenerateCases />;
+    case "review":
+      return <ReviewGrid />;
+    case "push":
+      return <PushDialog />;
+    case "cycles":
+      return isFeatureEnabled("testCycles") ? (
+        <CyclesView />
+      ) : (
+        <ComingSoon label="Test Cycles" description="Shipping in Phase 10." />
+      );
+  }
+}
+
+function LegacyRegressionScreen({
+  screen,
+  handlers,
+}: {
+  screen: RegressionScreenName;
+  handlers: ScreenHandlers;
+}) {
+  switch (screen) {
+    case "home":
+      return <SetupView onStatusResolved={handlers.onStatusResolved} />;
+    case "workbench":
+      return (
+        <SelectView
+          onTicketsSelected={handlers.onTicketsSelected}
+          saveState={handlers.saveState}
+        />
+      );
+    case "themes":
+    case "generate":
+      // v1 had no separate themes screen — grouping and generation
+      // both lived in GenerateView. Both legacy routes resolve there.
+      return (
+        <GenerateView
+          tickets={handlers.tickets}
+          onGenerated={handlers.onGenerated}
+          onBack={handlers.onBackFromGenerate}
+          saveState={handlers.saveState}
+          initialInstructions={handlers.initialInstructions}
+          initialGroups={handlers.initialGroups}
+        />
+      );
+    case "review":
+    case "push":
+      return (
+        <ReviewView
+          testCases={handlers.testCases}
+          projectKey={handlers.projectKey}
+          onBack={handlers.onBackFromReview}
+          onUpdateTestCases={handlers.onUpdateTestCases}
+          saveStateImmediate={handlers.saveStateImmediate}
+          initialPushResult={handlers.initialPushResult}
+        />
+      );
+    case "cycles":
+      return isFeatureEnabled("testCycles") ? (
+        <CyclesView />
+      ) : (
+        <ComingSoon label="Test Cycles" description="Shipping in Phase 10." />
+      );
+  }
+}
+
+function ComingSoon({ label, description }: { label: string; description?: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center h-full px-6 text-center">
+      <h2 className="t-h1 text-ink">{label}</h2>
+      {description && (
+        <p className="t-body text-ink-muted mt-2 max-w-md">{description}</p>
+      )}
     </div>
   );
 }
 
-function TitleBar() {
+function V1TitleBar() {
   const isTauri =
     typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 

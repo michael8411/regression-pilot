@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { SetupView } from "@/components/SetupView";
 import { SelectView } from "@/components/SelectView";
@@ -106,6 +106,8 @@ export default function App() {
 
   const useNewShell = isFeatureEnabled("workspaceSwitcher");
 
+  const hasRestoredRef = useRef(false);
+
   const {
     sessionId,
     restoredState,
@@ -140,7 +142,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!restoredState || Object.keys(restoredState).length === 0) return;
+    if (hasRestoredRef.current) return;
+    if (!restoredState) return;
+
+    hasRestoredRef.current = true;
+    if (Object.keys(restoredState).length === 0) return;
 
     if (Array.isArray(restoredState.selectedTickets)) {
       setSelectedTickets(restoredState.selectedTickets as JiraTicket[]);

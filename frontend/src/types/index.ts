@@ -17,6 +17,40 @@ export interface JiraVersion {
   project_id: number;
 }
 
+export type PullRequestProvider = "github" | "ado" | "unknown";
+
+export interface LinkedPullRequest {
+  id: string;
+  provider: PullRequestProvider;
+  url: string;
+  title: string;
+  state: "open" | "merged" | "closed" | "unknown";
+  repository: string;
+  number: number | null;
+  updated_at?: string;
+  source: "jira_dev_status" | "development_links" | "manual";
+}
+
+export interface DevelopmentLinksProbeDiagnostic {
+  provider_hint: string;
+  application_type: string;
+  status: number;
+  ok: boolean;
+  pull_request_count: number;
+  duration_ms: number;
+  error: string;
+}
+
+export interface DevelopmentLinksDiagnostics {
+  source: string;
+  issue_id: string;
+  issue_key: string;
+  probes: DevelopmentLinksProbeDiagnostic[];
+  selected_pull_request_count: number;
+  selected_link_count: number;
+  error: string;
+}
+
 export interface JiraTicket {
   key: string;
   id: string;
@@ -38,6 +72,10 @@ export interface JiraTicket {
   epic_key?: string | null;
   parent_key?: string | null;
   component_name?: string | null;
+  development_links: string[];
+  pull_requests: LinkedPullRequest[];
+  development_links_error?: string;
+  development_links_diagnostics?: DevelopmentLinksDiagnostics;
 }
 
 export interface JiraComment {

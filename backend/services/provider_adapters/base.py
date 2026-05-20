@@ -26,12 +26,16 @@ class AdapterUnavailable(Exception):
 
     Routing must catch this and degrade gracefully; never bubble up to the
     user-facing generation endpoint.
+
+    `reason` is a human-safe summary. `code` is an optional short token
+    callers can map to UI/metadata strings (e.g. "connection_failed").
     """
 
-    def __init__(self, provider: str, reason: str) -> None:
+    def __init__(self, provider: str, reason: str, *, code: Optional[str] = None) -> None:
         super().__init__(f"{provider}: {reason}")
         self.provider = provider
         self.reason = reason
+        self.code = code or "unavailable"
 
 
 class ProviderAdapter(abc.ABC):

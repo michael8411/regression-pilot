@@ -34,7 +34,7 @@ try:
         AtlassianTicketAdapter,
         AdoRestAdapter,
         GithubRestAdapter,
-        SqlServerStubAdapter,
+        SqlServerRestAdapter,
         ZephyrRestReadAdapter,
     )
 except ImportError:  # pragma: no cover
@@ -48,7 +48,7 @@ except ImportError:  # pragma: no cover
         AtlassianTicketAdapter,
         AdoRestAdapter,
         GithubRestAdapter,
-        SqlServerStubAdapter,
+        SqlServerRestAdapter,
         ZephyrRestReadAdapter,
     )
 
@@ -86,7 +86,7 @@ def build_default_adapters(ticket: dict) -> AdapterSet:
         atlassian=AtlassianTicketAdapter(ticket=ticket),
         github=GithubRestAdapter() if s.github_configured else None,
         ado=AdoRestAdapter() if s.ado_configured else None,
-        sql_server=SqlServerStubAdapter(),  # always present, always raises
+        sql_server=SqlServerRestAdapter() if s.sql_server_configured else None,
         zephyr_read=ZephyrRestReadAdapter() if s.zephyr_api_token else None,
     )
 

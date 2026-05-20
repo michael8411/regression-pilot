@@ -4,15 +4,22 @@ import type {
   CoreServiceId,
   GithubConnectionPayload,
   JiraConnectionPayload,
+  SqlServerConnectionPayload,
+  SqlServerDiagnostics,
   TestResult,
 } from "@/types/coreConnections";
+import type { ConnectionReadiness } from "@/types/readiness";
+import { backendFetch } from "@/lib/backendAuth";
 
 const BASE = "http://127.0.0.1:8000";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const resp = await fetch(`${BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
+  const resp = await backendFetch(`${BASE}${path}`, {
     ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options?.headers as Record<string, string> | undefined),
+    },
   });
   if (!resp.ok) {
     const body = await resp.json().catch(() => ({ detail: resp.statusText }));
@@ -23,6 +30,10 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 export function getCoreConnectionsStatus() {
   return request<CoreConnectionsStatus>("/config/status");
+}
+
+export function getConnectionReadiness() {
+  return request<ConnectionReadiness>("/config/readiness");
 }
 
 export function saveJiraCredentials(payload: JiraConnectionPayload) {
@@ -71,4 +82,15 @@ export function listGithubRepos() {
 
 export function listAdoRepos() {
   return request<{ repos: string[] }>("/config/ado/repos");
+}
+
+export function saveSqlServerCredentials(payload: SqlServerConnectionPayload) {
+  return request<{ updated: string[] }>("/config/credentials", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function testSqlServer() {
+  return request<SqlServerDiagnostics>("/config/test-sql-server");
 }

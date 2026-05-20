@@ -8,7 +8,6 @@ necessary.
 
 from __future__ import annotations
 
-import re
 from typing import Optional
 
 import httpx
@@ -24,6 +23,7 @@ try:
         ReviewComment,
     )
     from backend.services.github_service import GITHUB_API, _auth_headers
+    from backend.services.dev_link_parser import parse_pr_url
 except ImportError:  # pragma: no cover
     from config.settings import get_settings
     from schemas.context_bundle_models import (
@@ -33,21 +33,17 @@ except ImportError:  # pragma: no cover
         ReviewComment,
     )
     from services.github_service import GITHUB_API, _auth_headers
-
-
-_PR_URL_RE = re.compile(
-    r"github\.com/(?P<owner>[^/\s]+)/(?P<repo>[^/\s]+)/pull/(?P<num>\d+)",
-    re.IGNORECASE,
-)
+    from services.dev_link_parser import parse_pr_url
 
 
 def parse_github_pr(dev_links: list[str]) -> Optional[tuple[str, str, int]]:
     for link in dev_links:
         if not link:
             continue
-        m = _PR_URL_RE.search(link)
-        if m:
-            return m.group("owner"), m.group("repo"), int(m.group("num"))
+        parsed = parse_pr_url(link)
+        if parsed["provider"] == "github" and parsed["number"] is not None:
+            owner, _, repo = parsed["repository"].partition("/")
+            return owner, repo, parsed["number"]
     return None
 
 
@@ -68,8 +64,19 @@ class GithubRestAdapter(GithubAdapter):
         self._token = token
 
     async def health(self) -> bool:
-        s = get_settings()
-        return bool(self._token or s.github_access_token)
+        return bool(self._effective_token())
+
+    def _effective_token(self) -> str:
+        if self._token:
+            return self._token
+        try:
+            from backend.services.auth import identity_service
+        except ImportError:  # pragma: no cover
+            from services.auth import identity_service
+        return (
+            identity_service.get_oauth_access_token("github")
+            or get_settings().github_access_token
+        )
 
     async def fetch_pr_context(
         self,
@@ -78,8 +85,7 @@ class GithubRestAdapter(GithubAdapter):
         pr_number: int,
         max_files: int,
     ) -> CodeContext:
-        s = get_settings()
-        token = self._token or s.github_access_token
+        token = self._effective_token()
         if not token:
             raise AdapterUnavailable("github", "no GitHub access token configured")
 

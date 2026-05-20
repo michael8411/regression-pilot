@@ -3,6 +3,7 @@ import re
 import uuid
 from typing import AsyncIterator
 
+import structlog
 from google import genai
 from google.genai import types
 
@@ -10,10 +11,14 @@ try:
     from backend.config.settings import get_settings
     from backend.config.preferences import read_preferences
     from backend.schemas.context_bundle_models import ContextBundle
+    from backend.utils.secret_scanner import redact_for_external as _redact_for_external
 except ImportError:  # pragma: no cover - supports running from backend/ as script
     from config.settings import get_settings
     from config.preferences import read_preferences
     from schemas.context_bundle_models import ContextBundle
+    from utils.secret_scanner import redact_for_external as _redact_for_external
+
+_log = structlog.get_logger("testdeck.ai_service")
 
 SYSTEM_INSTRUCTION = """
 You are a senior QA engineer specializing in regression testing for HCSS construction management products,
@@ -497,6 +502,40 @@ GROUP_TICKETS_SCHEMA = {
 def _get_client() -> genai.Client:
     return genai.Client(api_key=get_settings().gemini_api_key)
 
+
+def redact_prompt_for_external(prompt: str, *, context: str) -> tuple[str, list[str]]:
+    """Redact secrets in prompt and return (redacted_prompt, pattern_names).
+
+    Logs pattern names and count only — never logs the matched values or prompt body.
+    """
+    redacted, findings = _redact_for_external(prompt)
+    pattern_names = sorted({
+        f.get("pattern_name")
+        for f in findings
+        if isinstance(f, dict) and f.get("pattern_name")
+    })
+    if pattern_names:
+        _log.warning(
+            "outbound_ai_prompt_redacted",
+            context=context,
+            pattern_names=pattern_names,
+            finding_count=len(findings),
+        )
+    return redacted, pattern_names
+
+
+def _redact_messages(messages: list[dict]) -> tuple[list[dict], list[str]]:
+    """Return a redacted copy of messages and sorted union of pattern names found."""
+    all_warnings: set[str] = set()
+    out: list[dict] = []
+    for msg in messages:
+        content = str(msg.get("content", ""))
+        redacted, warnings = redact_prompt_for_external(content, context="chat_content")
+        all_warnings.update(warnings)
+        out.append({**msg, "content": redacted} if warnings else msg)
+    return out, sorted(all_warnings)
+
+
 def _build_test_generation_ticket_view(tickets: list[dict]) -> list[dict]:
     return [
         {
@@ -537,6 +576,8 @@ Create the smallest set of high-value regression test cases that covers the real
 {user_message if user_message else "Generate practical regression test cases with conservative, non-hallucinated UI detail."}
 """
 
+    prompt, scan_warnings = redact_prompt_for_external(prompt, context="generate_test_cases")
+
     response = await client.aio.models.generate_content(
         model=read_preferences()["ai_model"],
         contents=prompt,
@@ -549,7 +590,10 @@ Create the smallest set of high-value regression test cases that covers the real
         ),
     )
 
-    return json.loads(response.text)
+    result = json.loads(response.text)
+    if scan_warnings:
+        result["secret_scan_warnings"] = [{"pattern_name": p} for p in scan_warnings]
+    return result
 
 
 def _priority_bucket(priority: str) -> str:
@@ -739,6 +783,10 @@ IMPORTANT:
 {user_message if user_message else "Generate practical regression test cases with conservative, non-hallucinated UI detail."}
 """
 
+    prompt, scan_warnings = redact_prompt_for_external(
+        prompt, context="generate_test_cases_from_bundle"
+    )
+
     response = await client.aio.models.generate_content(
         model=read_preferences()["ai_model"],
         contents=prompt,
@@ -750,7 +798,10 @@ IMPORTANT:
             response_schema=TEST_CASES_SCHEMA,
         ),
     )
-    return json.loads(response.text)
+    result = json.loads(response.text)
+    if scan_warnings:
+        result["secret_scan_warnings"] = [{"pattern_name": p} for p in scan_warnings]
+    return result
 
 
 _GROUPING_MODEL = "gemini-2.5-flash-lite"
@@ -800,6 +851,8 @@ Tickets JSON:
 {json.dumps(ticket_view, indent=2)}
 """
 
+    prompt, _ = redact_prompt_for_external(prompt, context="group_tickets_semantic")
+
     client = _get_client()
     try:
         response = await client.aio.models.generate_content(
@@ -813,7 +866,6 @@ Tickets JSON:
                 response_mime_type="application/json",
                 response_schema=GROUP_TICKETS_SCHEMA,
                 temperature=0.2,
-                thinking_config=types.ThinkingConfig(thinking_budget=0),
                 max_output_tokens=4096,
             ),
         )
@@ -851,7 +903,9 @@ async def chat_message(
             )
             system += f"\n\n## Current Ticket Context\n{ticket_summary}"
 
-    contents = _build_contents(messages)
+    system, _ = redact_prompt_for_external(system, context="chat_message.system")
+    redacted_messages, _ = _redact_messages(messages)
+    contents = _build_contents(redacted_messages)
 
     response = await client.aio.models.generate_content(
         model=prefs["ai_model"],
@@ -896,7 +950,16 @@ async def stream_chat_message(
     if tool_catalog:
         system += _build_tool_catalog_prompt(tool_catalog)
 
-    contents = _build_contents(messages)
+    # Redact outbound copies — original messages list is not mutated.
+    system, sys_warnings = redact_prompt_for_external(
+        system, context="stream_chat_message.system"
+    )
+    redacted_messages, msg_warnings = _redact_messages(messages)
+    all_warnings = sorted(set(sys_warnings) | set(msg_warnings))
+    if all_warnings:
+        yield {"secret_scan_warnings": [{"pattern_name": p} for p in all_warnings]}
+
+    contents = _build_contents(redacted_messages)
 
     parser = _ToolCallStreamParser() if tool_catalog else None
 
@@ -945,8 +1008,16 @@ def _build_tool_catalog_prompt(catalog: list[dict]) -> str:
         "- Emit at most one tool tag per turn.",
         "- The JSON between the tags MUST be valid JSON.",
         "- Do not nest tags. Do not paraphrase the tag.",
+        "- Only call a tool when external data is genuinely required.",
+        "- Prefer one focused tool call over multiple speculative calls.",
+        "- Do not call SQL tools for general questions; only when the user",
+        "  asks about tables, columns, schema, or procedures.",
+        "- Never attempt write/update/delete/transition/merge actions. Only",
+        "  read/search/get/list tools are exposed.",
         "- After the tool runs, the tool output will be shown to you on a",
         "  later turn so you can summarize it for the user.",
+        "- If the tool you need is not in this list, explain the limitation",
+        "  instead of fabricating an answer.",
         "",
         "Available tools:",
     ]

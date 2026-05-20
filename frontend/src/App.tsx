@@ -29,6 +29,7 @@ import { AssistantWorkspace } from "@/components/assistant";
 import { LiveWorkspace } from "@/components/live";
 import { requestOpenCreateDialog as requestOpenMcpDialog } from "@/components/mcp";
 import { SettingsOverlay } from "@/components/settings";
+import { SignInGate } from "@/components/shell/SignInGate";
 import { CyclesView } from "@/components/cycles";
 import { getConfigStatus } from "@/lib/api";
 import { RouteProvider, useRoute } from "@/contexts/RouteContext";
@@ -390,6 +391,7 @@ export default function App() {
           />
         )}
         {isFeatureEnabled("settingsV2") && <SettingsOverlay />}
+        <SignInGateBridge />
       </RouteProvider>
     </CommandRegistryProvider>
   );
@@ -398,6 +400,12 @@ export default function App() {
 function ShellCommandsBridge() {
   useGlobalCommandShortcut();
   return null;
+}
+
+function SignInGateBridge() {
+  const { gotoSettings } = useRoute();
+  if (!isFeatureEnabled("oauthSignIn")) return null;
+  return <SignInGate onOpenSettings={() => gotoSettings()} />;
 }
 
 function CoreCommandsBridge({

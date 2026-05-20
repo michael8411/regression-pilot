@@ -23,6 +23,7 @@ try:
         RoutingDecision,
         RoutingReasonCode,
     )
+    from backend.services.dev_link_parser import infer_platform_from_links
 except ImportError:  # pragma: no cover
     from schemas.context_bundle_models import (
         ProviderName,
@@ -30,6 +31,7 @@ except ImportError:  # pragma: no cover
         RoutingDecision,
         RoutingReasonCode,
     )
+    from services.dev_link_parser import infer_platform_from_links
 
 
 # Canonical provider order — used everywhere we serialize routing output.
@@ -176,8 +178,16 @@ def build_routing_plan(
     priority_bucket = _priority_depth(signals.priority)
     has_regression_label = "REGRESSION-CANDIDATE" in labels
 
-    platform = project_platform_for(signals.project_key, platform_mapping)
     pr_present = signals.has_pr_link()
+    # Prefer platform inferred from actual PR URLs; fall back to repo mapping.
+    dev_links = list(signals.development_links)
+    inferred = infer_platform_from_links(dev_links)
+    if inferred != "none":
+        platform: RepoPlatform = inferred  # type: ignore[assignment]
+        platform_inferred = True
+    else:
+        platform = project_platform_for(signals.project_key, platform_mapping)
+        platform_inferred = False
 
     decisions: list[RoutingDecision] = []
 
@@ -197,8 +207,8 @@ def build_routing_plan(
         )
     )
 
-    # 2) GitHub / ADO — depends on PR + mapping.
-    decisions.extend(_repo_decisions(platform, pr_present, available))
+    # 2) GitHub / ADO — depends on PR + platform (inferred from URL or mapped).
+    decisions.extend(_repo_decisions(platform, pr_present, available, platform_inferred=platform_inferred))
 
     # 3) SQL Server — depends on labels/components.
     db_label_hit = bool(labels & DB_SIGNAL_LABELS)
@@ -258,8 +268,14 @@ def _repo_decisions(
     platform: RepoPlatform,
     pr_present: bool,
     available: set[ProviderName],
+    *,
+    platform_inferred: bool = False,
 ) -> list[RoutingDecision]:
-    """Emit github + ado decisions exactly once each."""
+    """Emit github + ado decisions exactly once each.
+
+    platform_inferred=True means the platform was read from the PR URL itself
+    (not from the project repo mapping table).
+    """
     out: list[RoutingDecision] = []
     for repo_provider in ("github", "ado"):
         reasons: list[RoutingReasonCode] = []
@@ -274,7 +290,10 @@ def _repo_decisions(
             reasons.append("skipped_no_mapping")
         else:
             reasons.append("pr_link_present")
-            reasons.append("platform_mapping_resolved")
+            if platform_inferred:
+                reasons.append("platform_inferred_from_dev_link")
+            else:
+                reasons.append("platform_mapping_resolved")
             if repo_provider in available:
                 included = True
             else:

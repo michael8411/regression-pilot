@@ -15,7 +15,9 @@ export type FeatureFlag =
   | "mcpContextBundleV1"
   | "mcpTransportHttpV1"
   | "mcpTransportSseV1"
-  | "assistantPolicyRoutingV1";
+  | "assistantPolicyRoutingV1"
+  | "oauthSignIn"
+  | "repoMappingFallback";
 
 const DEFAULTS: Record<FeatureFlag, boolean> = {
   workspaceSwitcher: true,
@@ -39,6 +41,14 @@ const DEFAULTS: Record<FeatureFlag, boolean> = {
   mcpTransportHttpV1: true,
   mcpTransportSseV1: false,
   assistantPolicyRoutingV1: true,
+  // Phase 17 HCSS sign-in UX. Off by default until OAuth app
+  // registrations (Entra/GitHub/Atlassian client IDs + redirect URIs) are
+  // available. Flip via VITE_FF_OAUTH_SIGN_IN=true or
+  // `window.__ff.enable("oauthSignIn")` in dev.
+  oauthSignIn: false,
+  // Jira linked PRs are now the primary repo discovery path. Keep manual repo
+  // mapping available as an opt-in fallback while testing edge cases.
+  repoMappingFallback: false,
 };
 
 /**

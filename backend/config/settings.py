@@ -19,6 +19,19 @@ _KEYRING_FIELDS: dict[str, str] = {
     "github_access_token": "github_access_token",
     "ado_org": "ado_org",
     "ado_access_token": "ado_access_token",
+    "sql_server_connection_string": "sql_server_connection_string",
+    "sql_server_database": "sql_server_database",
+    "sql_server_schema_allowlist": "sql_server_schema_allowlist",
+    "sql_server_table_allowlist": "sql_server_table_allowlist",
+    "sql_server_include_procs": "sql_server_include_procs",
+    "jira_dev_status_application_types": "jira_dev_status_application_types",
+    # Phase 17 — OAuth app registration values. Not secrets but keyring-
+    # backed so the app picks them up without redeploys.
+    "oauth_entra_tenant_id": "oauth_entra_tenant_id",
+    "oauth_entra_client_id": "oauth_entra_client_id",
+    "oauth_github_client_id": "oauth_github_client_id",
+    "oauth_atlassian_client_id": "oauth_atlassian_client_id",
+    "oauth_redirect_base_url": "oauth_redirect_base_url",
 }
 
 
@@ -36,6 +49,24 @@ class Settings(BaseSettings):
 
     ado_org: str = ""
     ado_access_token: str = ""
+
+    sql_server_connection_string: str = ""
+    sql_server_database: str = ""
+    sql_server_schema_allowlist: str = "dbo"
+    sql_server_table_allowlist: str = ""
+    sql_server_include_procs: bool = False
+
+    # Optional override for Jira dev-status applicationType probes.
+    # Comma-separated. Merged with built-in defaults at call site so users
+    # cannot accidentally drop the standard GitHub/Azure DevOps coverage.
+    jira_dev_status_application_types: str = ""
+
+    # Phase 17 — OAuth app registration values.
+    oauth_entra_tenant_id: str = ""
+    oauth_entra_client_id: str = ""
+    oauth_github_client_id: str = ""
+    oauth_atlassian_client_id: str = ""
+    oauth_redirect_base_url: str = "http://127.0.0.1:8000"
 
     backend_port: int = 8000
     log_level: str = "info"
@@ -57,6 +88,31 @@ class Settings(BaseSettings):
     def ado_configured(self) -> bool:
         return bool(self.ado_org and self.ado_access_token)
 
+    @property
+    def sql_server_configured(self) -> bool:
+        return bool(self.sql_server_connection_string)
+
+    @property
+    def oauth_configured(self) -> bool:
+        return bool(
+            self.oauth_entra_tenant_id
+            and self.oauth_entra_client_id
+            and self.oauth_github_client_id
+            and self.oauth_atlassian_client_id
+        )
+
+    def missing_oauth_settings(self) -> list[str]:
+        missing: list[str] = []
+        if not self.oauth_entra_tenant_id:
+            missing.append("oauth_entra_tenant_id")
+        if not self.oauth_entra_client_id:
+            missing.append("oauth_entra_client_id")
+        if not self.oauth_github_client_id:
+            missing.append("oauth_github_client_id")
+        if not self.oauth_atlassian_client_id:
+            missing.append("oauth_atlassian_client_id")
+        return missing
+
     model_config = {
         "env_file": str(Path(__file__).resolve().parent.parent / ".env"),
         "env_file_encoding": "utf-8",
@@ -68,7 +124,12 @@ class Settings(BaseSettings):
                 val = get_credential(kr_key)
             except Exception:
                 continue
-            if val:
+            if not val:
+                continue
+            # Bool fields stored as "true"/"false" strings in keyring.
+            if field == "sql_server_include_procs":
+                object.__setattr__(self, field, val.lower() == "true")
+            else:
                 object.__setattr__(self, field, val)
 
 

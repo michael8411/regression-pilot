@@ -1,4 +1,8 @@
-import type { GeneratedTestCases, JiraTicket } from "@/types";
+import type {
+  DevelopmentLinksDiagnostics,
+  GeneratedTestCases,
+  JiraTicket,
+} from "@/types";
 
 // =============================================================================
 // Live boards — API payload shape
@@ -308,6 +312,7 @@ export interface ContextMetadata {
   per_section_chars: Record<string, number>;
   hard_cap_chars: number;
   truncated_sections: string[];
+  development_links_diagnostics?: DevelopmentLinksDiagnostics | null;
 }
 
 export interface LiveGenerateResponse extends GeneratedTestCases {

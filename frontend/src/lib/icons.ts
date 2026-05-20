@@ -43,6 +43,7 @@ export {
   File,
   Filter,
   Folder,
+  GitPullRequest,
   GripVertical,
   HelpCircle,
   History,

@@ -21,7 +21,7 @@ export function RepoMappingPane() {
     <div className="flex flex-col h-full">
       <SettingsPaneHeader
         title="Repo Mapping"
-        subtitle="Map each Jira project to its code repository so Testdeck knows where to pull PR diffs from when generating test cases."
+        subtitle="Fallback configuration for projects where Jira does not expose a full PR URL. Testdeck uses PRs linked in Jira Development first; mappings are only needed when those links are missing."
       />
       <div className="flex-1 min-h-0 overflow-auto px-6 py-5">
         <div className="flex items-center justify-end mb-3">
@@ -117,10 +117,9 @@ export function RepoMappingPane() {
         <div className="mt-3 rounded-md border border-info/20 bg-info/5 px-3 py-2.5 flex gap-2 items-start">
           <Info size={13} className="text-info mt-0.5 shrink-0" />
           <div className="text-[11.5px] text-ink-secondary leading-snug">
-            When a ticket references a PR (e.g.{" "}
-            <span className="font-mono text-accent-text">PR #842</span>),
-            Testdeck looks up the mapping to fetch the diff. Unmapped projects
-            will skip code context.
+            Testdeck now uses PRs linked in Jira Development first. Add
+            mappings only as a fallback for projects where Jira does not expose
+            a full PR URL (e.g. older manual tickets or incomplete dev links).
           </div>
         </div>
       </div>

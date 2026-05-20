@@ -2,7 +2,13 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 import aiosqlite
 
-DB_PATH = Path(__file__).resolve().parent.parent / "testdeck.db"
+try:
+    from backend.config.paths import db_path as _paths_db_path
+except ImportError:
+    from config.paths import db_path as _paths_db_path
+
+# Computed at module load; tests can override via monkeypatch.setattr(conn_mod, "DB_PATH", …)
+DB_PATH: Path = _paths_db_path()
 
 
 @asynccontextmanager

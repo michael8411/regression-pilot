@@ -48,10 +48,15 @@ class CredentialsUpdateRequest(BaseModel):
     github_access_token: SecretStr | None = None
     ado_org: str | None = None
     ado_access_token: SecretStr | None = None
+    sql_server_connection_string: SecretStr | None = None
+    sql_server_database: str | None = None
+    sql_server_schema_allowlist: str | None = None
+    sql_server_table_allowlist: str | None = None
+    sql_server_include_procs: bool | None = None
 
 
 class DisconnectServiceRequest(BaseModel):
-    service: Literal["jira", "github", "ado", "gemini", "zephyr"]
+    service: Literal["jira", "github", "ado", "gemini", "zephyr", "sql_server"]
 
 class CreateSessionRequest(BaseModel):
     project_key: str

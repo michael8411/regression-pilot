@@ -9,6 +9,7 @@ import type {
   ToolCallPayload,
   ToolCatalogEntry,
 } from "@/types/conversations";
+import { backendFetch } from "@/lib/backendAuth";
 
 import { API_BASE, http as jfetch } from "@/lib/http";
 
@@ -112,6 +113,7 @@ export async function* streamAssistantReply(
   done?: boolean;
   error?: string;
   message_id?: string;
+  secret_scan_warnings?: { pattern_name: string }[];
   tool_call?: {
     request_id: string;
     connection_id: string;
@@ -123,7 +125,7 @@ export async function* streamAssistantReply(
     options?.tool_catalog && options.tool_catalog.length > 0
       ? JSON.stringify({ tool_catalog: options.tool_catalog })
       : "{}";
-  const res = await fetch(
+  const res = await backendFetch(
     `${BASE}/conversations/${encodeURIComponent(id)}/messages/stream`,
     {
       method: "POST",

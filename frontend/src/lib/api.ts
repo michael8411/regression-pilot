@@ -16,6 +16,7 @@ import type {
   SaveStateResponse
 } from "@/types";
 import { apiUrl, http, HttpError } from "@/lib/http";
+import { backendFetch } from "@/lib/backendAuth";
 
 const request = http;
 
@@ -83,7 +84,7 @@ export async function* streamChatMessage(
   messages: ChatMessage[],
   tickets?: JiraTicket[]
 ): AsyncGenerator<string> {
-  const resp = await fetch(apiUrl("/ai/chat/stream"), {
+  const resp = await backendFetch(apiUrl("/ai/chat/stream"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ messages, tickets }),

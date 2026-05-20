@@ -7,16 +7,18 @@
  *   2. (new) The drawer AI tab — composes the exported subcomponents
  *      (`LiveGeneratePromptField`, `LiveGenerateToggles`, `LiveGenerateToolsRow`,
  *      `LiveGenerateResultList`) so the AI panel never duplicates this markup.
- *
- * The tools row is intentionally minimal until the MCP refactor lands its
- * routing metadata; it renders a stable placeholder so consumers can rely
- * on the visual contract without coupling to context-bundle internals.
  */
 
 import { useEffect, useRef, useState } from "react";
 import { Loader2, X, Sparkles } from "@/lib/icons";
 import { clsx } from "clsx";
-import { useLiveGenerate } from "./hooks/useLiveGenerate";
+import {
+  useLiveGenerate,
+  summarizeContextSources,
+  type ContextSourceRow,
+  type DbContextSummary,
+  type PrContextSummary,
+} from "./hooks/useLiveGenerate";
 import { useLiveGeneratedCases } from "./hooks/useLiveGeneratedCases";
 import { useOptionalLiveActivityFeed } from "./activity";
 import { GeneratedTestCaseCard } from "./GeneratedTestCaseCard";
@@ -230,12 +232,47 @@ interface Props {
   onClose: () => void;
 }
 
+const PR_CONTEXT_TONE: Record<PrContextSummary["state"], string> = {
+  linked_prs_used: "text-success",
+  no_linked_prs: "text-ink-muted",
+  dev_links_unavailable: "text-warn",
+  provider_not_connected: "text-warn",
+  dev_links_unparseable: "text-warn",
+  ticket_enrichment_failed: "text-warn",
+  none: "text-ink-muted",
+};
+
+const DB_CONTEXT_TONE: Record<DbContextSummary["state"], string> = {
+  schema_used: "text-success",
+  skipped_no_signal: "text-ink-muted",
+  not_configured: "text-ink-muted",
+  pyodbc_missing: "text-warn",
+  odbc_driver_missing: "text-warn",
+  connection_failed: "text-warn",
+  login_failed: "text-warn",
+  database_unavailable: "text-warn",
+  metadata_permission_denied: "text-warn",
+  schema_allowlist_empty: "text-warn",
+  table_allowlist_filtered_all: "text-warn",
+  unavailable: "text-warn",
+  none: "text-ink-muted",
+};
+
+const SOURCE_STATUS_TONE: Record<ContextSourceRow["status"], string> = {
+  used: "text-success",
+  skipped: "text-ink-muted",
+  unavailable: "text-warn",
+  not_configured: "text-ink-muted",
+};
+
 export function LiveGeneratePanel({ ticket, onClose }: Props) {
   const [prompt, setPrompt] = useState("");
   const [options, setOptions] = useState<LiveGenerateOptions>(
     DEFAULT_GENERATE_OPTIONS,
   );
-  const { generate, generating, result, error, reset, toolsUsed } = useLiveGenerate();
+  const { generate, generating, result, error, reset, toolsUsed, prContext, dbContext } =
+    useLiveGenerate();
+  const sources = summarizeContextSources(result?.context_metadata);
   const { save: persistCases } = useLiveGeneratedCases(ticket.key);
   const activity = useOptionalLiveActivityFeed();
 
@@ -352,6 +389,43 @@ export function LiveGeneratePanel({ ticket, onClose }: Props) {
               </span>
             ))
           )}
+        </div>
+      )}
+
+      {prContext && (
+        <div
+          className={`mt-1 text-[10.5px] ${PR_CONTEXT_TONE[prContext.state]}`}
+        >
+          PR context: {prContext.message}
+        </div>
+      )}
+
+      {dbContext && (
+        <div
+          className={`mt-1 text-[10.5px] ${DB_CONTEXT_TONE[dbContext.state]}`}
+        >
+          SQL context: {dbContext.message}
+        </div>
+      )}
+
+      {result && sources.length > 0 && (
+        <div className="mt-2 rounded-md border border-subtle bg-surface-overlay/40 px-2 py-1.5">
+          <div className="text-[10px] uppercase tracking-wide text-ink-muted mb-1">
+            Context sources
+          </div>
+          <ul className="text-[10.5px] flex flex-col gap-0.5">
+            {sources.map((row) => (
+              <li
+                key={row.label}
+                className="flex items-center justify-between gap-2"
+              >
+                <span className="text-ink-secondary">{row.label}</span>
+                <span className={SOURCE_STATUS_TONE[row.status]}>
+                  {row.detail}
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

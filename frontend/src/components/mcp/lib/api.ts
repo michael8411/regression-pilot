@@ -4,6 +4,7 @@ import type {
   McpInvokeResponse,
   McpTestResult,
   McpTool,
+  McpTransport,
 } from "@/types/mcp";
 import { apiUrl } from "@/lib/http";
 
@@ -36,11 +37,13 @@ export async function getConnection(id: string): Promise<McpConnection> {
 
 export async function createConnection(input: {
   name: string;
-  command: string;
+  command?: string;
   args?: string[];
   env?: Record<string, string>;
   enabled?: boolean;
   autoApprove?: string[];
+  transport?: McpTransport;
+  url?: string;
 }): Promise<McpConnection> {
   return jsonOrThrow(
     await fetch(BASE, {
@@ -60,6 +63,8 @@ export async function patchConnection(
     env: Record<string, string>;
     enabled: boolean;
     autoApprove: string[];
+    transport: McpTransport;
+    url: string;
   }>,
 ): Promise<McpConnection> {
   return jsonOrThrow(

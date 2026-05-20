@@ -264,7 +264,7 @@ function TicketWorkbenchInner({
         }
       />
 
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      <div className="flex overflow-hidden flex-1 min-h-0">
         <ProjectVersionPanel
           selectedProject={selectedProject}
           selectedVersion={selectedVersion}
@@ -297,7 +297,7 @@ function TicketWorkbenchInner({
             />
           )}
 
-          <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="overflow-y-auto flex-1 min-h-0">
             <TicketListBody
               loading={tickets.loading}
               error={tickets.error}
@@ -337,7 +337,7 @@ function Header({
   disabled,
 }: HeaderProps) {
   return (
-    <div className="flex items-center gap-4 px-6 py-4 border-b border-subtle">
+    <div className="flex gap-4 items-center px-6 py-4 border-b border-subtle">
       <div className="flex-1 min-w-0">
         <h1 className="t-h2 text-ink">Pick tickets</h1>
         <p className="t-meta text-ink-muted">
@@ -415,7 +415,7 @@ function ListToolbar({
   onClearAll,
 }: ListToolbarProps) {
   return (
-    <div className="flex items-center justify-between px-4 py-2 border-b border-subtle bg-surface-panel/40">
+    <div className="flex justify-between items-center px-4 py-2 border-b border-subtle bg-surface-panel/40">
       <span className="t-meta text-ink-muted tnum">
         {displayedCount === totalCount
           ? `${totalCount} tickets`
@@ -424,13 +424,13 @@ function ListToolbar({
           <span className="ml-2 text-ink-secondary">· {selectedCount} selected</span>
         )}
       </span>
-      <div className="flex items-center gap-2">
+      <div className="flex gap-2 items-center">
         <button
           type="button"
           onClick={onSelectAllDisplayed}
           className="text-[11px] text-accent-text hover:text-accent transition-colors"
         >
-          Select shown
+          Select All
         </button>
         <span className="text-ink-faint">|</span>
         <button
@@ -472,7 +472,7 @@ function TicketListBody({
 }: ListBodyProps) {
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-16">
+      <div className="flex justify-center items-center py-16">
         <Loader2 size={20} className="animate-spin-fast text-accent" />
         <span className="ml-3 text-[13px] text-ink-muted">Fetching tickets…</span>
       </div>
@@ -543,26 +543,26 @@ function TicketListBody({
 function WorkbenchSkeleton() {
   return (
     <div className="flex flex-col h-full animate-fade-in">
-      <div className="flex items-center gap-4 px-6 py-4 border-b border-subtle">
-        <div className="space-y-2 flex-1">
-          <div className="h-5 w-40 rounded bg-surface-overlay animate-pulse" />
-          <div className="h-3 w-72 rounded bg-surface-overlay animate-pulse" />
+      <div className="flex gap-4 items-center px-6 py-4 border-b border-subtle">
+        <div className="flex-1 space-y-2">
+          <div className="w-40 h-5 rounded animate-pulse bg-surface-overlay" />
+          <div className="w-72 h-3 rounded animate-pulse bg-surface-overlay" />
         </div>
         <div className="h-9 w-[280px] rounded-lg bg-surface-overlay animate-pulse" />
-        <div className="h-9 w-32 rounded-lg bg-surface-overlay animate-pulse" />
+        <div className="w-32 h-9 rounded-lg animate-pulse bg-surface-overlay" />
       </div>
       <div className="flex flex-1 min-h-0">
         <div className="w-[280px] shrink-0 px-4 py-5 border-r border-subtle space-y-4">
-          <div className="h-3 w-16 rounded bg-surface-overlay animate-pulse" />
-          <div className="h-9 rounded-lg bg-surface-overlay animate-pulse" />
-          <div className="h-3 w-16 rounded bg-surface-overlay animate-pulse mt-4" />
-          <div className="h-9 rounded-lg bg-surface-overlay animate-pulse" />
+          <div className="w-16 h-3 rounded animate-pulse bg-surface-overlay" />
+          <div className="h-9 rounded-lg animate-pulse bg-surface-overlay" />
+          <div className="mt-4 w-16 h-3 rounded animate-pulse bg-surface-overlay" />
+          <div className="h-9 rounded-lg animate-pulse bg-surface-overlay" />
         </div>
         <div className="flex-1 p-6 space-y-3">
           {Array.from({ length: 8 }).map((_, i) => (
             <div
               key={i}
-              className="h-9 rounded bg-surface-overlay animate-pulse"
+              className="h-9 rounded animate-pulse bg-surface-overlay"
             />
           ))}
         </div>

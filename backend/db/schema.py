@@ -198,6 +198,21 @@ CREATE TABLE IF NOT EXISTS mcp_connections (
     enabled       INTEGER NOT NULL DEFAULT 1,
     auto_approve  TEXT NOT NULL DEFAULT '',
     created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL,
+    transport     TEXT NOT NULL DEFAULT 'stdio',
+    url           TEXT NOT NULL DEFAULT ''
+)
+"""
+
+CREATE_PROJECT_REPO_MAP_TABLE = """
+CREATE TABLE IF NOT EXISTS project_repo_map (
+    id            TEXT PRIMARY KEY,
+    jira_project  TEXT NOT NULL UNIQUE,
+    platform      TEXT NOT NULL CHECK (platform IN ('github','azure_devops')),
+    org           TEXT NOT NULL DEFAULT '',
+    repo          TEXT NOT NULL DEFAULT '',
+    ado_project   TEXT,
+    created_at    TEXT NOT NULL,
     updated_at    TEXT NOT NULL
 )
 """

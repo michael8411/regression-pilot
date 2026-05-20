@@ -14,6 +14,7 @@ try:
         McpTool,
     )
     from backend.services import mcp_connection_service as svc
+    from backend.services import observability_service as obs
     from backend.services.mcp.runtime import get_runtime
 except ImportError:  # pragma: no cover
     from schemas.mcp_models import (
@@ -26,6 +27,7 @@ except ImportError:  # pragma: no cover
         McpTool,
     )
     from services import mcp_connection_service as svc
+    from services import observability_service as obs
     from services.mcp.runtime import get_runtime
 
 
@@ -136,6 +138,13 @@ async def invoke_tool(conn_id: str, tool: str, payload: McpInvokeRequest):
             tool_name=tool,
             duration_ms=duration_ms,
         )
+        obs.assistant_tool_invoked(
+            conversation_id=payload.requestId,
+            connection_id=conn_id,
+            tool=tool,
+            duration_ms=duration_ms,
+            ok=True,
+        )
         return McpInvokeResponse(ok=True, output=result, duration_ms=duration_ms)
     except TimeoutError as e:
         duration_ms = int((time.monotonic() - start) * 1000)
@@ -162,6 +171,14 @@ async def invoke_tool(conn_id: str, tool: str, payload: McpInvokeRequest):
             tool_name=tool,
             error_class=type(e).__name__,
             duration_ms=duration_ms,
+        )
+        obs.assistant_tool_invoked(
+            conversation_id=payload.requestId,
+            connection_id=conn_id,
+            tool=tool,
+            duration_ms=duration_ms,
+            ok=False,
+            error_code=type(e).__name__,
         )
         return McpInvokeResponse(
             ok=False, error=str(e), duration_ms=duration_ms

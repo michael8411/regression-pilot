@@ -86,5 +86,6 @@ export interface ToolCatalogEntry {
   connection_id: string;
   tool: string;
   description?: string;
-  schema?: Record<string, unknown> | null;
+  /** JSON Schema-shaped tool argument descriptor (Phase 4). */
+  inputSchema?: Record<string, unknown> | null;
 }

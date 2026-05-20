@@ -30,6 +30,23 @@ export function PushDialog() {
   const { goto } = useRoute();
   const { state, isRestoring, saveStateImmediate } = useRegressionSession();
 
+  const onCloseGoto = useCallback(
+    () => goto(["regression", "review"]),
+    [goto],
+  );
+  const onNewSessionGoto = useCallback(
+    () => goto(["regression", "workbench"]),
+    [goto],
+  );
+  const onEditGoto = useCallback(
+    () => goto(["regression", "review"]),
+    [goto],
+  );
+  const onGenerateGoto = useCallback(
+    () => goto(["regression", "generate"]),
+    [goto],
+  );
+
   if (isRestoring) return <PushSkeleton />;
 
   if (state.testCases.length === 0) {
@@ -54,10 +71,10 @@ export function PushDialog() {
       project={state.selectedProject}
       initialResult={state.pushResult ?? null}
       saveStateImmediate={saveStateImmediate}
-      onCloseGoto={() => goto(["regression", "review"])}
-      onNewSessionGoto={() => goto(["regression", "workbench"])}
-      onEditGoto={() => goto(["regression", "review"])}
-      onGenerateGoto={() => goto(["regression", "generate"])}
+      onCloseGoto={onCloseGoto}
+      onNewSessionGoto={onNewSessionGoto}
+      onEditGoto={onEditGoto}
+      onGenerateGoto={onGenerateGoto}
     />
   );
 }

@@ -15,9 +15,11 @@ import type {
   SaveStateRequest,
   SaveStateResponse
 } from "@/types";
-import { apiUrl, http } from "@/lib/http";
+import { apiUrl, http, HttpError } from "@/lib/http";
 
 const request = http;
+
+export { HttpError as ApiError };
 
 export async function getHealth() {
   return request<{ status: string; jira_configured: boolean; ai_configured: boolean }>("/health");

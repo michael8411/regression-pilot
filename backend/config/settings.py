@@ -16,6 +16,9 @@ _KEYRING_FIELDS: dict[str, str] = {
     "gemini_api_key": "gemini_api_key",
     "zephyr_api_token": "zephyr_api_token",
     "zephyr_base_url": "zephyr_base_url",
+    "github_access_token": "github_access_token",
+    "ado_org": "ado_org",
+    "ado_access_token": "ado_access_token",
 }
 
 
@@ -29,6 +32,11 @@ class Settings(BaseSettings):
     zephyr_base_url: str = "https://api.zephyrscale.smartbear.com/v2"
     zephyr_api_token: str = ""
 
+    github_access_token: str = ""
+
+    ado_org: str = ""
+    ado_access_token: str = ""
+
     backend_port: int = 8000
     log_level: str = "info"
     app_env: str = "development"
@@ -40,6 +48,14 @@ class Settings(BaseSettings):
     @property
     def jira_configured(self) -> bool:
         return bool(self.jira_base_url and self.jira_email and self.jira_api_token)
+
+    @property
+    def github_configured(self) -> bool:
+        return bool(self.github_access_token)
+
+    @property
+    def ado_configured(self) -> bool:
+        return bool(self.ado_org and self.ado_access_token)
 
     model_config = {
         "env_file": str(Path(__file__).resolve().parent.parent / ".env"),

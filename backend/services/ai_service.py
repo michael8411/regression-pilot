@@ -9,9 +9,11 @@ from google.genai import types
 try:
     from backend.config.settings import get_settings
     from backend.config.preferences import read_preferences
+    from backend.schemas.context_bundle_models import ContextBundle
 except ImportError:  # pragma: no cover - supports running from backend/ as script
     from config.settings import get_settings
     from config.preferences import read_preferences
+    from schemas.context_bundle_models import ContextBundle
 
 SYSTEM_INSTRUCTION = """
 You are a senior QA engineer specializing in regression testing for HCSS construction management products,
@@ -550,6 +552,206 @@ Create the smallest set of high-value regression test cases that covers the real
     return json.loads(response.text)
 
 
+def _priority_bucket(priority: str) -> str:
+    p = (priority or "").strip().lower()
+    if p in {"critical", "highest", "blocker"}:
+        return "critical"
+    if p == "high":
+        return "high"
+    if p == "low":
+        return "low"
+    return "medium"
+
+
+def _render_generation_rules(bundle: ContextBundle) -> list[str]:
+    """Priority-aware generation rules based on routed signals.
+
+    Stays compact so it doesn't bloat the prompt: bullets only, no prose.
+    """
+    bucket = _priority_bucket(bundle.ticket.priority)
+    labels = {l.upper() for l in bundle.ticket.labels}
+    is_regression = "REGRESSION-CANDIDATE" in labels
+
+    lines: list[str] = ["## Generation Rules"]
+    if bucket == "critical" or is_regression:
+        lines.append(
+            "- Depth: max. Cover the primary regression scenario, at least one"
+            " edge/boundary case tied to the diff, and persistence/sync"
+            " where the ticket implies saved data."
+        )
+    elif bucket == "high":
+        lines.append(
+            "- Depth: high. Cover the primary workflow + one negative or"
+            " persistence scenario when supported by the ticket."
+        )
+    elif bucket == "low":
+        lines.append("- Depth: low. One or two focused cases is sufficient.")
+    else:
+        lines.append("- Depth: medium. 2-4 focused cases.")
+
+    if bundle.code_context.file_diffs:
+        lines.append(
+            "- Diff present: include at least one case that exercises the"
+            " specific logic change visible in the diff."
+        )
+    if bundle.db_context.tables:
+        lines.append(
+            "- DB context present: include a data-integrity assertion tied"
+            " to the inferred entities."
+        )
+    if bundle.existing_tests.tests:
+        lines.append(
+            "- Existing Zephyr tests are listed below — DO NOT duplicate"
+            " their coverage; add complementary cases only."
+        )
+    return lines
+
+
+def _render_bundle_for_prompt(bundle: ContextBundle) -> str:
+    """Serialize a ContextBundle to the model-facing block.
+
+    Reads ONLY from the budgeted bundle — never from raw provider responses.
+    Section order matches the Phase 3 prompt assembly contract:
+        1. Ticket Context
+        2. Code Context (if present)
+        3. Database Context (if present)
+        4. Existing Test Cases (if present)
+        5. Generation Rules (priority-aware)
+    Empty sections are skipped to keep token usage tight.
+    """
+    t = bundle.ticket
+    lines: list[str] = []
+
+    # 1) Ticket Context
+    lines.append("## Ticket Context")
+    lines.append(f"- key: {t.key}")
+    if t.issue_type:
+        lines.append(f"- issue_type: {t.issue_type}")
+    if t.priority:
+        lines.append(f"- priority: {t.priority}")
+    if t.labels:
+        lines.append(f"- labels: {', '.join(t.labels)}")
+    if t.components:
+        lines.append(f"- components: {', '.join(t.components)}")
+    if t.summary:
+        lines.append(f"- summary: {t.summary}")
+    if t.description:
+        lines.append("- description:")
+        lines.append(t.description)
+    if t.comments:
+        lines.append(f"- comments ({len(t.comments)}):")
+        for c in t.comments:
+            lines.append(f"  - {c.author}: {c.body}")
+    if t.linked_issues:
+        joined = ", ".join(
+            f"{li.key}({li.relation})" if li.relation else li.key
+            for li in t.linked_issues
+        )
+        lines.append(f"- linked: {joined}")
+
+    flags = t.quality_flags
+    flag_bits = [name for name, v in flags.model_dump().items() if v]
+    if flag_bits:
+        lines.append(f"- quality_flags: {', '.join(flag_bits)}")
+
+    # 2) Code Context
+    c = bundle.code_context
+    if c.platform != "none" or c.pr_title or c.changed_files or c.file_diffs:
+        lines.append("")
+        lines.append("## Code Context")
+        if c.pr_title:
+            lines.append(f"- pr_title: {c.pr_title}")
+        if c.pr_state:
+            lines.append(f"- pr_state: {c.pr_state}")
+        if c.target_branch:
+            lines.append(f"- target_branch: {c.target_branch}")
+        if c.changed_files:
+            lines.append(f"- changed_files ({len(c.changed_files)}):")
+            for f in c.changed_files:
+                lines.append(
+                    f"  - {f.path} [{f.status}] +{f.additions}/-{f.deletions}"
+                )
+        if c.file_diffs:
+            lines.append("- diffs:")
+            for fd in c.file_diffs:
+                lines.append(f"  - {fd.path}")
+                lines.append(fd.patch)
+        if c.review_comments:
+            lines.append(f"- review_comments ({len(c.review_comments)}):")
+            for rc in c.review_comments:
+                loc = f" {rc.path}:{rc.line}" if rc.path else ""
+                lines.append(f"  - {rc.author}{loc}: {rc.body}")
+
+    # 3) Database Context
+    d = bundle.db_context
+    if d.tables:
+        lines.append("")
+        lines.append("## Database Context")
+        for tbl in d.tables:
+            cols = ", ".join(
+                str(col.get("name", ""))
+                for col in tbl.columns
+                if isinstance(col, dict)
+            )
+            lines.append(f"- {tbl.name}: {cols}")
+
+    # 4) Existing Test Cases (dedupe guard)
+    e = bundle.existing_tests
+    if e.tests:
+        lines.append("")
+        lines.append("## Existing Test Cases (do not duplicate)")
+        for et in e.tests:
+            tag = f" [{et.last_status}]" if et.last_status else ""
+            lines.append(f"- {et.name}{tag}")
+
+    # 5) Generation Rules
+    lines.append("")
+    lines.extend(_render_generation_rules(bundle))
+
+    return "\n".join(lines)
+
+
+async def generate_test_cases_from_bundle(
+    bundle: ContextBundle,
+    user_message: str = "",
+) -> dict:
+    """Phase 1 routed-context generation entry point.
+
+    Mirrors `generate_test_cases` but reads from the budgeted ContextBundle.
+    Returns the same dict shape, so callers can swap incrementally.
+    """
+    client = _get_client()
+    context_block = _render_bundle_for_prompt(bundle)
+
+    prompt = f"""
+Generate structured Zephyr Scale regression test cases for the ticket below.
+
+IMPORTANT:
+- The context block has been pre-routed and size-budgeted. Do not assume any
+  information beyond what is shown. If a field is absent, treat it as unknown.
+- Prefer correctness over false specificity. Use controlled fallback wording
+  when runtime details are unclear.
+- Return JSON only, matching the provided schema exactly.
+
+{context_block}
+
+## Additional Instructions
+{user_message if user_message else "Generate practical regression test cases with conservative, non-hallucinated UI detail."}
+"""
+
+    response = await client.aio.models.generate_content(
+        model=read_preferences()["ai_model"],
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            system_instruction=SYSTEM_INSTRUCTION,
+            max_output_tokens=16384,
+            temperature=0.15,
+            response_mime_type="application/json",
+            response_schema=TEST_CASES_SCHEMA,
+        ),
+    )
+    return json.loads(response.text)
+
 
 _GROUPING_MODEL = "gemini-2.5-flash-lite"
 
@@ -756,6 +958,29 @@ def _build_tool_catalog_prompt(catalog: list[dict]) -> str:
         if desc:
             line += f" — {desc[:200]}"
         lines.append(line)
+        schema = entry.get("inputSchema")
+        if isinstance(schema, dict) and schema:
+            # Show parameter names + types so the model picks the right keys.
+            props = schema.get("properties") if isinstance(schema, dict) else None
+            if isinstance(props, dict) and props:
+                summary_parts: list[str] = []
+                for pname, pschema in list(props.items())[:8]:
+                    if not isinstance(pschema, dict):
+                        continue
+                    ptype = pschema.get("type") or "any"
+                    summary_parts.append(f"{pname}:{ptype}")
+                required = schema.get("required")
+                req_set = (
+                    set(r for r in required if isinstance(r, str))
+                    if isinstance(required, list)
+                    else set()
+                )
+                if req_set:
+                    summary_parts.append(
+                        f"required={','.join(sorted(req_set))}"
+                    )
+                if summary_parts:
+                    lines.append(f"  args: {', '.join(summary_parts)}")
     return "\n".join(lines)
 
 

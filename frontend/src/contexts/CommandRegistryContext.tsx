@@ -1,10 +1,15 @@
 /**
  * Command registry — the data layer behind the Mod+K palette.
  *
- * Every screen can contribute commands via `useRegisterCommand`. The
- * palette reads the full list, filters by query, and executes the
- * selected command's action. Routes flow through `useRoute().goto`;
- * free-form side effects run as `action.run()`.
+ * Split into two contexts to prevent an infinite-update loop:
+ *
+ *   WriteCtx  — carries only `register`. It never changes after mount, so
+ *               `useRegisterCommand` callers don't re-render when the command
+ *               list changes (which would re-create the commands they just
+ *               registered, firing the effect again, ad infinitum).
+ *
+ *   ReadCtx   — carries `commands`, `open`, `openPalette`, `closePalette`.
+ *               Only the palette and the global shortcut hook subscribe here.
  */
 
 import {
@@ -49,16 +54,22 @@ export interface CommandItem {
   when?: () => boolean;
 }
 
-interface CommandRegistryValue {
-  commands: CommandItem[];
+// ── Write context (stable) ─────────────────────────────────────────────────
+interface WriteValue {
   register: (cmd: CommandItem) => () => void;
+}
+const WriteCtx = createContext<WriteValue | null>(null);
+
+// ── Read context (changes with commands / open state) ──────────────────────
+interface ReadValue {
+  commands: CommandItem[];
   open: boolean;
   openPalette: () => void;
   closePalette: () => void;
 }
+const ReadCtx = createContext<ReadValue | null>(null);
 
-const CommandRegistryContext = createContext<CommandRegistryValue | null>(null);
-
+// ── Provider ───────────────────────────────────────────────────────────────
 export function CommandRegistryProvider({ children }: { children: ReactNode }) {
   const [commands, setCommands] = useState<CommandItem[]>([]);
   const [open, setOpen] = useState(false);
@@ -77,38 +88,49 @@ export function CommandRegistryProvider({ children }: { children: ReactNode }) {
   const openPalette = useCallback(() => setOpen(true), []);
   const closePalette = useCallback(() => setOpen(false), []);
 
-  const value = useMemo<CommandRegistryValue>(
-    () => ({ commands, register, open, openPalette, closePalette }),
-    [commands, register, open, openPalette, closePalette],
+  const writeValue = useMemo<WriteValue>(() => ({ register }), [register]);
+  const readValue = useMemo<ReadValue>(
+    () => ({ commands, open, openPalette, closePalette }),
+    [commands, open, openPalette, closePalette],
   );
 
   return (
-    <CommandRegistryContext.Provider value={value}>
-      {children}
-    </CommandRegistryContext.Provider>
+    <WriteCtx.Provider value={writeValue}>
+      <ReadCtx.Provider value={readValue}>{children}</ReadCtx.Provider>
+    </WriteCtx.Provider>
   );
 }
 
-export function useCommandRegistry(): CommandRegistryValue {
-  const ctx = useContext(CommandRegistryContext);
-  if (!ctx) {
-    throw new Error(
-      "useCommandRegistry must be used inside <CommandRegistryProvider>",
-    );
+// ── Public hooks ───────────────────────────────────────────────────────────
+
+/**
+ * Full registry access — commands list + open state + palette controls.
+ * Use this only in the palette and the global shortcut hook.
+ */
+export function useCommandRegistry(): WriteValue & ReadValue {
+  const write = useContext(WriteCtx);
+  const read = useContext(ReadCtx);
+  if (!write || !read) {
+    throw new Error("useCommandRegistry must be used inside <CommandRegistryProvider>");
   }
-  return ctx;
+  return useMemo(() => ({ ...read, register: write.register }), [read, write.register]);
 }
 
 /**
  * Register a single command for as long as the component is mounted.
  * Pass `null` / `false` to skip (handy for conditional commands).
  *
- * The command object should be memoized if it closes over props —
- * otherwise it re-registers every render. The registry dedupes by id
- * so this is cheap, but a fresh closure is still created each time.
+ * Uses only the stable WriteCtx so this hook does NOT re-run when the
+ * command list changes — preventing infinite-update loops.
+ *
+ * The command object should be memoized (useMemo) if it closes over props.
  */
 export function useRegisterCommand(cmd: CommandItem | null | false): void {
-  const { register } = useCommandRegistry();
+  const write = useContext(WriteCtx);
+  if (!write) {
+    throw new Error("useRegisterCommand must be used inside <CommandRegistryProvider>");
+  }
+  const { register } = write;
   useEffect(() => {
     if (!cmd) return;
     return register(cmd);
@@ -117,12 +139,16 @@ export function useRegisterCommand(cmd: CommandItem | null | false): void {
 
 /**
  * Register a batch of commands. Use this when the set of commands
- * is known statically (e.g. the shell's core commands). Loop-calling
- * `useRegisterCommand` would violate Rules of Hooks if the array
- * length ever changed.
+ * is known statically (e.g. the shell's core commands).
+ *
+ * Uses only the stable WriteCtx — same reasoning as useRegisterCommand.
  */
 export function useRegisterCommands(cmds: CommandItem[]): void {
-  const { register } = useCommandRegistry();
+  const write = useContext(WriteCtx);
+  if (!write) {
+    throw new Error("useRegisterCommands must be used inside <CommandRegistryProvider>");
+  }
+  const { register } = write;
   useEffect(() => {
     const unregs = cmds.map((c) => register(c));
     return () => unregs.forEach((u) => u());

@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException
 
 try:
     from backend.schemas.live_models import (
+        ContextMetadataEnvelope,
         CreateLiveBoardRequest,
         LiveActivityCreate,
         LiveActivityEvent,
@@ -16,17 +17,22 @@ try:
         LivePinnedTicketUpsert,
         LivePublishCasesRequest,
         LivePublishCasesResponse,
+        RoutingDecisionEnvelope,
         UpdateLiveBoardRequest,
     )
     from backend.services import (
         ai_service,
+        context_orchestrator,
         live_artifact_service,
         live_board_service,
         live_publish_service,
+        observability_service as obs,
     )
+    from backend.services.context_orchestrator import AtlassianContextRequired
     from backend.utils.http_errors import upstream_error
 except ImportError:  # pragma: no cover - supports running from backend/ as script
     from schemas.live_models import (
+        ContextMetadataEnvelope,
         CreateLiveBoardRequest,
         LiveActivityCreate,
         LiveActivityEvent,
@@ -39,14 +45,18 @@ except ImportError:  # pragma: no cover - supports running from backend/ as scri
         LivePinnedTicketUpsert,
         LivePublishCasesRequest,
         LivePublishCasesResponse,
+        RoutingDecisionEnvelope,
         UpdateLiveBoardRequest,
     )
     from services import (
         ai_service,
+        context_orchestrator,
         live_artifact_service,
         live_board_service,
         live_publish_service,
+        observability_service as obs,
     )
+    from services.context_orchestrator import AtlassianContextRequired
     from utils.http_errors import upstream_error
 
 
@@ -117,9 +127,70 @@ async def delete_board(board_id: str):
 
 @router.post("/generate")
 async def live_generate(req: LiveGenerateRequest):
-    """Generate test cases for a single ticket. Skips grouping."""
+    """Generate test cases for a single ticket. Skips grouping.
+
+    Phase 3: routes through the context orchestrator by default and
+    returns a `context_metadata` envelope so the UI can render the
+    "Using tools" indicator and surface budget/diagnostics. The legacy
+    direct-ticket path is preserved behind `use_context_bundle=False`.
+    """
     try:
-        return await ai_service.generate_test_cases([req.ticket], req.instructions)
+        ticket_key = str(req.ticket.get("key") or "")
+        if not req.use_context_bundle:
+            with obs.request_scope("live"):
+                timer = obs.Timer()
+                result = await ai_service.generate_test_cases(
+                    [req.ticket], req.instructions
+                )
+                obs.generation_completed(
+                    ticket_key=ticket_key,
+                    test_case_count=len(result.get("test_cases", []) or []),
+                    duration_ms=timer.ms(),
+                    routed=False,
+                )
+                return result
+
+        with obs.request_scope("live"):
+            timer = obs.Timer()
+            try:
+                bundle = await context_orchestrator.build_for_ticket(req.ticket)
+            except AtlassianContextRequired as exc:
+                # Atlassian is the source of truth — abort generation rather
+                # than serve a low-quality result without the ticket.
+                raise upstream_error("Atlassian", exc)
+
+            cases = await ai_service.generate_test_cases_from_bundle(
+                bundle, req.instructions
+            )
+            obs.generation_completed(
+                ticket_key=ticket_key,
+                test_case_count=len(cases.get("test_cases", []) or []),
+                duration_ms=timer.ms(),
+                routed=True,
+            )
+            meta = ContextMetadataEnvelope(
+                providers_called=list(bundle.tool_trace.providers_called),
+                routing_decisions=[
+                    RoutingDecisionEnvelope(
+                        provider=d.provider,
+                        included=d.included,
+                        reasons=list(d.reasons),
+                    )
+                    for d in bundle.tool_trace.routing_decisions
+                ],
+                latency_ms=dict(bundle.tool_trace.latency_ms),
+                errors=[e.model_dump() for e in bundle.tool_trace.errors],
+                input_chars=bundle.budget.input_chars,
+                per_section_chars=dict(bundle.budget.per_section_chars),
+                hard_cap_chars=bundle.budget.hard_cap_chars,
+                truncated_sections=list(bundle.budget.truncated_sections),
+            )
+            return {
+                "test_cases": cases.get("test_cases", []),
+                "context_metadata": meta.model_dump(),
+            }
+    except HTTPException:
+        raise
     except Exception as e:
         raise upstream_error("Gemini", e)
 

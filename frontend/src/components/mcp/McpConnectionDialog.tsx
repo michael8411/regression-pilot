@@ -1,27 +1,33 @@
 import { useEffect, useState } from "react";
 import { Button, Spinner, Toggle } from "@/components/ui";
 import { useMcpConnections } from "./McpConnectionsProvider";
-import { McpEnvEditor } from "./McpEnvEditor";
 import { McpAutoApproveEditor } from "./McpAutoApproveEditor";
 import { McpModal } from "./McpModal";
+import {
+  McpTransportFields,
+  authToEnv,
+  envToAuth,
+  type TransportFormState,
+} from "./McpTransportFields";
 import { findPreset, MCP_PRESETS } from "./lib/presets";
 import { getConnection } from "./lib/api";
 import type { McpConnection } from "@/types/mcp";
 
-interface FormState {
+interface FormState extends TransportFormState {
   name: string;
-  command: string;
-  args: string;
-  env: Record<string, string>;
   autoApprove: string[];
   enabled: boolean;
 }
 
 const empty: FormState = {
   name: "",
+  transport: "stdio",
   command: "",
   args: "",
   env: {},
+  url: "",
+  authType: "none",
+  authToken: "",
   autoApprove: [],
   enabled: true,
 };
@@ -32,7 +38,6 @@ interface Props {
   onClose: () => void;
 }
 
-/** Split args on whitespace, preserving "double quoted" segments. */
 function parseArgs(input: string): string[] {
   const trimmed = input.trim();
   if (!trimmed) return [];
@@ -55,11 +60,16 @@ export function McpConnectionDialog({ mode, existing, onClose }: Props) {
       try {
         const full = await getConnection(existing.id);
         if (cancelled) return;
+        const auth = envToAuth(full.transport, full.env);
         setForm({
           name: full.name,
+          transport: full.transport,
           command: full.command,
           args: full.args.join(" "),
           env: full.env,
+          url: full.url,
+          authType: auth.authType,
+          authToken: auth.authToken,
           autoApprove: full.autoApprove,
           enabled: full.enabled,
         });
@@ -80,6 +90,7 @@ export function McpConnectionDialog({ mode, existing, onClose }: Props) {
     if (!preset || preset.id === "custom") return;
     setForm((prev) => ({
       ...prev,
+      transport: "stdio",
       name: preset.label,
       command: preset.command,
       args: preset.args.join(" "),
@@ -94,13 +105,16 @@ export function McpConnectionDialog({ mode, existing, onClose }: Props) {
     setError(null);
     setBusy(true);
     try {
+      const env = authToEnv(form);
       const payload = {
         name: form.name.trim(),
-        command: form.command.trim(),
-        args: parseArgs(form.args),
-        env: form.env,
+        command: form.transport === "stdio" ? form.command.trim() : "",
+        args: form.transport === "stdio" ? parseArgs(form.args) : [],
+        env,
         autoApprove: form.autoApprove,
         enabled: form.enabled,
+        transport: form.transport,
+        url: form.transport === "stdio" ? "" : form.url.trim(),
       };
       if (mode === "create") {
         await create(payload);
@@ -117,7 +131,7 @@ export function McpConnectionDialog({ mode, existing, onClose }: Props) {
 
   const title =
     mode === "create"
-      ? "Add MCP connection"
+      ? "Add MCP server"
       : `Edit ${existing?.name ?? "connection"}`;
 
   const footer = (
@@ -144,7 +158,7 @@ export function McpConnectionDialog({ mode, existing, onClose }: Props) {
         </div>
       ) : (
         <div className="flex flex-col gap-4">
-          {mode === "create" && (
+          {mode === "create" && form.transport === "stdio" && (
             <Field label="Preset">
               <select
                 value={presetId}
@@ -169,46 +183,16 @@ export function McpConnectionDialog({ mode, existing, onClose }: Props) {
               onChange={(e) =>
                 setForm((f) => ({ ...f, name: e.target.value }))
               }
-              placeholder="GitHub MCP"
+              placeholder={
+                form.transport === "stdio" ? "GitHub MCP" : "Confluence Search"
+              }
               className="g-input text-[12.5px]"
               autoComplete="off"
               spellCheck={false}
             />
           </Field>
 
-          <Field label="Command">
-            <input
-              value={form.command}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, command: e.target.value }))
-              }
-              placeholder="npx"
-              className="g-input text-[12px] font-mono"
-              autoComplete="off"
-              spellCheck={false}
-            />
-          </Field>
-
-          <Field
-            label="Args"
-            hint="Space-separated. Quote args containing spaces."
-          >
-            <input
-              value={form.args}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, args: e.target.value }))
-              }
-              placeholder="-y @modelcontextprotocol/server-github"
-              className="g-input text-[12px] font-mono"
-              autoComplete="off"
-              spellCheck={false}
-            />
-          </Field>
-
-          <McpEnvEditor
-            value={form.env}
-            onChange={(env) => setForm((f) => ({ ...f, env }))}
-          />
+          <McpTransportFields value={form} onChange={(s) => setForm({ ...form, ...s })} />
 
           <McpAutoApproveEditor
             value={form.autoApprove}

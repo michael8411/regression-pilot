@@ -36,6 +36,11 @@ export function ThemeEditor() {
   const { goto } = useRoute();
   const { state, isRestoring, saveStateBatch } = useRegressionSession();
 
+  const onContinueGoto = useCallback(
+    () => goto(["regression", "generate"]),
+    [goto],
+  );
+
   if (isRestoring) return <ThemeEditorSkeleton />;
 
   if (state.selectedTickets.length === 0) {
@@ -59,7 +64,7 @@ export function ThemeEditor() {
       tickets={state.selectedTickets}
       versionName={state.selectedVersion?.name ?? ""}
       saveStateBatch={saveStateBatch}
-      onContinueGoto={() => goto(["regression", "generate"])}
+      onContinueGoto={onContinueGoto}
     />
   );
 }

@@ -46,7 +46,7 @@ export function McpToolListDrawer({ connectionId, onClose }: Props) {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[7900] bg-black/30 backdrop-blur-sm animate-fade-in"
+      className="fixed inset-0 z-[8000] bg-black/30 backdrop-blur-sm animate-fade-in"
       onClick={onClose}
       aria-hidden
     >

@@ -99,6 +99,7 @@ class TestBoardCRUD:
 class TestLiveGenerate:
 
     def test_calls_ai_service(self, live_client, monkeypatch):
+        """Legacy direct-ticket path (use_context_bundle=False)."""
         import services.ai_service as ai
 
         async def fake_generate(tickets, instructions):
@@ -109,10 +110,33 @@ class TestLiveGenerate:
         monkeypatch.setattr(ai, "generate_test_cases", fake_generate)
         r = live_client.post(
             "/live/generate",
-            json={"ticket": {"key": "FM-1", "summary": "x"}},
+            json={
+                "ticket": {"key": "FM-1", "summary": "x"},
+                "use_context_bundle": False,
+            },
         )
         assert r.status_code == 200
         assert r.json()["test_cases"][0]["name"] == "smoke"
+
+    def test_routed_path_returns_context_metadata(self, live_client, monkeypatch):
+        """Phase 3 default: routed pipeline returns context_metadata."""
+        import services.ai_service as ai
+
+        async def fake_from_bundle(bundle, instructions):
+            return {"test_cases": [{"name": "routed"}]}
+
+        monkeypatch.setattr(ai, "generate_test_cases_from_bundle", fake_from_bundle)
+        r = live_client.post(
+            "/live/generate",
+            json={"ticket": {"key": "FM-1", "summary": "x"}},
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert body["test_cases"][0]["name"] == "routed"
+        meta = body.get("context_metadata")
+        assert meta is not None
+        assert "routing_decisions" in meta
+        assert meta["hard_cap_chars"] > 0
 
     def test_502_on_ai_failure(self, live_client, monkeypatch):
         import services.ai_service as ai
@@ -122,7 +146,8 @@ class TestLiveGenerate:
 
         monkeypatch.setattr(ai, "generate_test_cases", fake_generate)
         r = live_client.post(
-            "/live/generate", json={"ticket": {"key": "FM-1"}}
+            "/live/generate",
+            json={"ticket": {"key": "FM-1"}, "use_context_bundle": False},
         )
         assert r.status_code == 502
 

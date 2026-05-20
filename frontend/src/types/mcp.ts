@@ -1,3 +1,5 @@
+export type McpTransport = "stdio" | "http" | "sse";
+
 export interface McpConnection {
   id: string;
   name: string;
@@ -11,6 +13,8 @@ export interface McpConnection {
   lastError: string | null;
   createdAt: string;
   updatedAt: string;
+  transport: McpTransport;
+  url: string;
 }
 
 export interface McpTool {

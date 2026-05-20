@@ -1,15 +1,33 @@
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+
+McpTransport = Literal["stdio", "http", "sse"]
 
 
 class McpConnectionCreate(BaseModel):
     name: str = Field(min_length=1, max_length=128)
-    command: str = Field(min_length=1, max_length=512)
+    # `command` is required for stdio transports; HTTP/SSE use `url` instead.
+    # We keep `command` non-optional but allow an empty string for url-based
+    # transports so existing stdio callers continue to validate unchanged.
+    command: str = Field(default="", max_length=512)
     args: List[str] = Field(default_factory=list)
     env: Dict[str, str] = Field(default_factory=dict)
     enabled: bool = True
     autoApprove: List[str] = Field(default_factory=list)
+    transport: McpTransport = "stdio"
+    url: str = Field(default="", max_length=2048)
+
+    @model_validator(mode="after")
+    def _validate_transport(self):
+        if self.transport == "stdio":
+            if not self.command:
+                raise ValueError("stdio transport requires a command")
+        else:
+            if not self.url:
+                raise ValueError(f"{self.transport} transport requires a url")
+        return self
 
     @field_validator("args")
     @classmethod
@@ -51,6 +69,8 @@ class McpConnectionPatch(BaseModel):
     env: Optional[Dict[str, str]] = None
     enabled: Optional[bool] = None
     autoApprove: Optional[List[str]] = None
+    transport: Optional[McpTransport] = None
+    url: Optional[str] = Field(default=None, max_length=2048)
 
     @field_validator("args")
     @classmethod
@@ -92,6 +112,8 @@ class McpConnection(BaseModel):
     lastError: Optional[str] = None
     createdAt: str
     updatedAt: str
+    transport: McpTransport = "stdio"
+    url: str = ""
 
 
 class McpTool(BaseModel):

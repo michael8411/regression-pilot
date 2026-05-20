@@ -73,6 +73,8 @@ async def save_state(session_id: str, req: SaveStateRequest):
             warnings = await session_service.save_state(session_id, req.key, req.value)
     except HTTPException:
         raise
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Session not found")
     except Exception as exc:
         raise _write_err(exc)
     return {"saved": True, "secret_scan_warnings": warnings}

@@ -36,7 +36,12 @@ export function ToolPickerTab() {
   useEffect(() => {
     if (!activeId) return;
     for (const t of tools) {
-      setToolDescription(activeId, t.name, t.description);
+      setToolDescription(
+        activeId,
+        t.name,
+        t.description,
+        (t.inputSchema as Record<string, unknown>) ?? null,
+      );
     }
   }, [activeId, tools]);
 

@@ -27,12 +27,16 @@ async function jsonOrThrow<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function mcpFetch(url: string, init?: RequestInit): Promise<Response> {
+  return backendFetch(url, init);
+}
+
 export async function listConnections(): Promise<McpConnection[]> {
-  return jsonOrThrow(await fetch(BASE));
+  return jsonOrThrow(await mcpFetch(BASE));
 }
 
 export async function getConnection(id: string): Promise<McpConnection> {
-  return jsonOrThrow(await fetch(`${BASE}/${encodeURIComponent(id)}`));
+  return jsonOrThrow(await mcpFetch(`${BASE}/${encodeURIComponent(id)}`));
 }
 
 export async function createConnection(input: {
@@ -46,7 +50,7 @@ export async function createConnection(input: {
   url?: string;
 }): Promise<McpConnection> {
   return jsonOrThrow(
-    await fetch(BASE, {
+    await mcpFetch(BASE, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(input),
@@ -67,8 +71,14 @@ export async function patchConnection(
     url: string;
   }>,
 ): Promise<McpConnection> {
+  debugMcpApi("H4_API_METHOD_MISMATCH", "api patchConnection called", {
+    id,
+    isManaged: id.startsWith("managed-"),
+    patchKeys: Object.keys(patch),
+    enabled: patch.enabled,
+  });
   return jsonOrThrow(
-    await fetch(`${BASE}/${encodeURIComponent(id)}`, {
+    await mcpFetch(`${BASE}/${encodeURIComponent(id)}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(patch),
@@ -77,7 +87,7 @@ export async function patchConnection(
 }
 
 export async function deleteConnection(id: string): Promise<void> {
-  const res = await fetch(`${BASE}/${encodeURIComponent(id)}`, {
+  const res = await mcpFetch(`${BASE}/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
   if (!res.ok) throw new Error(`MCP delete failed: ${res.status}`);
@@ -85,7 +95,7 @@ export async function deleteConnection(id: string): Promise<void> {
 
 export async function testConnection(id: string): Promise<McpTestResult> {
   return jsonOrThrow(
-    await fetch(`${BASE}/${encodeURIComponent(id)}/test`, { method: "POST" }),
+    await mcpFetch(`${BASE}/${encodeURIComponent(id)}/test`, { method: "POST" }),
   );
 }
 
@@ -96,7 +106,7 @@ export async function listTools(
   const url = refresh
     ? `${BASE}/${encodeURIComponent(id)}/tools?refresh=true`
     : `${BASE}/${encodeURIComponent(id)}/tools`;
-  return jsonOrThrow(await fetch(url));
+  return jsonOrThrow(await mcpFetch(url));
 }
 
 export async function invokeTool(
@@ -105,7 +115,7 @@ export async function invokeTool(
   request: McpInvokeRequest,
 ): Promise<McpInvokeResponse> {
   return jsonOrThrow(
-    await fetch(
+    await mcpFetch(
       `${BASE}/${encodeURIComponent(connectionId)}/tools/${encodeURIComponent(toolName)}/invoke`,
       {
         method: "POST",

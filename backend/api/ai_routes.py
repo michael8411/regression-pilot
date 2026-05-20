@@ -44,8 +44,11 @@ async def chat(req: ChatRequest):
 async def chat_stream(req: ChatRequest):
     async def event_generator():
         try:
-            async for text in ai_service.stream_chat_message(req.messages, req.tickets):
-                yield f"data: {json.dumps({'text': text})}\n\n"
+            async for chunk in ai_service.stream_chat_message(req.messages, req.tickets):
+                if isinstance(chunk, str):
+                    yield f"data: {json.dumps({'text': chunk})}\n\n"
+                elif isinstance(chunk, dict):
+                    yield f"data: {json.dumps(chunk)}\n\n"
             yield f"data: {json.dumps({'done': True})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"

@@ -10,6 +10,7 @@ import {
   type IconComponent,
 } from "@/lib/icons";
 import { useRoute } from "@/contexts/RouteContext";
+import { isFeatureEnabled } from "@/lib/featureFlags";
 
 export type SettingsPaneId =
   | "credentials"
@@ -36,6 +37,13 @@ export const SETTINGS_PANES: RailItem[] = [
   { id: "about",        label: "About",          icon: Info },
 ];
 
+function visibleSettingsPanes(): RailItem[] {
+  return SETTINGS_PANES.filter(
+    (pane) =>
+      pane.id !== "repo-mapping" || isFeatureEnabled("repoMappingFallback"),
+  );
+}
+
 interface Props {
   active: SettingsPaneId;
 }
@@ -47,7 +55,7 @@ export function SettingsRail({ active }: Props) {
       aria-label="Settings sections"
       className="w-[220px] shrink-0 border-r border-subtle bg-surface flex flex-col py-3"
     >
-      {SETTINGS_PANES.map(({ id, label, icon: Icon }) => {
+      {visibleSettingsPanes().map(({ id, label, icon: Icon }) => {
         const current = active === id;
         return (
           <button

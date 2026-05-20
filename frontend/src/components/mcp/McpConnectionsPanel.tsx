@@ -67,7 +67,10 @@ function McpConnectionsPanelInner() {
             Model Context Protocol
           </h2>
           <p className="text-[12px] text-ink-muted">
-            Connect external tool servers your assistant can call into.
+            MCP powers Assistant tools — it is not required for Live Testing or
+            Regression. Managed providers (Jira, GitHub, ADO, SQL) reuse your
+            configured credentials; add manual MCP connections here for custom
+            or local tools.
           </p>
         </div>
         <div className="flex items-center gap-2">

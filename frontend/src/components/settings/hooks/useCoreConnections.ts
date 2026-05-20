@@ -14,6 +14,7 @@ const EMPTY: CoreConnectionsStatus = {
   ado: { configured: false, org: null },
   gemini: { configured: false },
   zephyr: { configured: false },
+  sql_server: { configured: false, database: null, schema_allowlist: null, include_procs: false },
 };
 
 export function useCoreConnections() {
@@ -39,7 +40,7 @@ export function useCoreConnections() {
   }, [refresh]);
 
   const disconnect = useCallback(
-    async (service: CoreServiceId) => {
+    async (service: CoreServiceId | "gemini" | "zephyr") => {
       await disconnectService(service);
       await refresh();
     },

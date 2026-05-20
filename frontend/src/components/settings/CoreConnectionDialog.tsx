@@ -16,9 +16,10 @@ import { Button, IconButton } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import type {
   AuthMode,
-  CoreServiceId,
   TestResult,
 } from "@/types/coreConnections";
+
+type CoreDialogServiceId = "jira" | "github" | "ado";
 import {
   saveAdoCredentials,
   saveGithubCredentials,
@@ -29,7 +30,7 @@ import {
 } from "./lib/coreConnectionsApi";
 
 interface ServiceMeta {
-  id: CoreServiceId;
+  id: CoreDialogServiceId;
   name: string;
   brand: string;
   color: string;
@@ -39,7 +40,7 @@ interface ServiceMeta {
   scopes: string[];
 }
 
-const SERVICE_META: Record<CoreServiceId, ServiceMeta> = {
+const SERVICE_META: Record<CoreDialogServiceId, ServiceMeta> = {
   jira: {
     id: "jira",
     name: "Jira",
@@ -83,7 +84,7 @@ const SERVICE_META: Record<CoreServiceId, ServiceMeta> = {
 };
 
 interface Props {
-  service: CoreServiceId;
+  service: CoreDialogServiceId;
   initial?: {
     jiraBaseUrl?: string;
     jiraEmail?: string;

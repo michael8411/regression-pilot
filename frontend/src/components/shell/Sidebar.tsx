@@ -1,6 +1,7 @@
 import { type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { Kbd, KbdPill, StatusDot } from "@/components/ui";
+import { IdentityChip } from "./IdentityChip";
 import {
   ClipboardList,
   History,
@@ -104,7 +105,11 @@ export function Sidebar({
 
   return (
     <aside className="flex flex-col w-[230px] h-full px-3 py-4 border-r border-subtle bg-surface-panel shrink-0">
-      <Brand />
+      {isFeatureEnabled("oauthSignIn") ? (
+        <IdentityChip onOpenSettings={onOpenSettings} />
+      ) : (
+        <Brand />
+      )}
 
       <div className="t-label px-2 pt-2 pb-1">Workspace</div>
       <nav className="flex flex-col gap-0.5">

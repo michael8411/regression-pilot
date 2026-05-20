@@ -22,8 +22,9 @@ export const MCP_PRESETS: McpPreset[] = [
   },
   {
     id: "github",
-    label: "GitHub",
-    description: "Browse and search repositories, issues, and PRs.",
+    label: "GitHub (Manual / PAT fallback)",
+    description:
+      "Manual GitHub MCP via PAT. Most users should use the managed GitHub provider instead.",
     command: "npx",
     args: ["-y", "@modelcontextprotocol/server-github"],
     envKeys: ["GITHUB_PERSONAL_ACCESS_TOKEN"],
@@ -35,8 +36,9 @@ export const MCP_PRESETS: McpPreset[] = [
   },
   {
     id: "atlassian",
-    label: "Atlassian (Jira/Confluence)",
-    description: "Read and search Jira issues and Confluence pages.",
+    label: "Atlassian (Manual / API-token fallback)",
+    description:
+      "Manual Atlassian MCP via API token. Most users should use the managed Atlassian provider instead.",
     command: "npx",
     args: ["-y", "@sooperset/mcp-atlassian"],
     envKeys: ["JIRA_URL", "JIRA_USERNAME", "JIRA_API_TOKEN"],

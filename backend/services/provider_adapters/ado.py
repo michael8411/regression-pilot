@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 from typing import Optional
+from urllib.parse import unquote
 
 import httpx
 
@@ -36,10 +37,14 @@ except ImportError:  # pragma: no cover
     from services.ado_service import ADO_BASE, _headers
 
 
+# Mirrors dev_link_parser._ADO_PR_RE but also captures org separately, which
+# the adapter needs. Tolerates trailing slashes, query strings, and percent
+# encoding in project/repo segments.
 _ADO_PR_RE = re.compile(
-    r"(?:dev\.azure\.com|visualstudio\.com)/(?P<org>[^/\s]+)/"
-    r"(?:(?P<project>[^/\s]+)/)?"
-    r"_git/(?P<repo>[^/\s]+)/pullrequest/(?P<num>\d+)",
+    r"(?:dev\.azure\.com|visualstudio\.com)/(?P<org>[^/\s?#]+)/"
+    r"(?:(?P<project>[^/\s?#]+)/)?"
+    r"_git/(?P<repo>[^/\s?#]+)/pullrequest/(?P<num>\d+)"
+    r"(?=$|[/?#\s])",
     re.IGNORECASE,
 )
 
@@ -49,7 +54,8 @@ def parse_ado_pr(dev_links: list[str]) -> Optional[tuple[str, str, str, int]]:
     for link in dev_links:
         if not link:
             continue
-        m = _ADO_PR_RE.search(link)
+        normalized = unquote(link)
+        m = _ADO_PR_RE.search(normalized)
         if m:
             return (
                 m.group("org"),
@@ -76,9 +82,21 @@ class AdoRestAdapter(AdoAdapter):
         self._pr_id = pr_id
         self._token = token
 
+    def _effective_token(self) -> tuple[str, str]:
+        if self._token:
+            return self._token, "pat"
+        try:
+            from backend.services.auth import identity_service
+        except ImportError:  # pragma: no cover
+            from services.auth import identity_service
+        oauth_token = identity_service.get_oauth_access_token("entra")
+        if oauth_token:
+            return oauth_token, "oauth"
+        return get_settings().ado_access_token, "pat"
+
     async def health(self) -> bool:
-        s = get_settings()
-        return bool(self._token or s.ado_access_token)
+        tok, _ = self._effective_token()
+        return bool(tok)
 
     async def fetch_pr_context(
         self,
@@ -89,7 +107,7 @@ class AdoRestAdapter(AdoAdapter):
         max_files: int,
     ) -> CodeContext:
         s = get_settings()
-        token = self._token or s.ado_access_token
+        token, mode = self._effective_token()
         org = self._org or s.ado_org
         if not token or not org:
             raise AdapterUnavailable(
@@ -102,7 +120,7 @@ class AdoRestAdapter(AdoAdapter):
         if not proj or not rp or not pr:
             raise AdapterUnavailable("ado", "missing PR coordinates")
 
-        headers = _headers(token)
+        headers = _headers(token, auth_mode=mode)
         async with httpx.AsyncClient(timeout=12.0) as client:
             try:
                 pr_resp = await client.get(

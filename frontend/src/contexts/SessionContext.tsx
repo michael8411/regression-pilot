@@ -127,12 +127,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         const response = await saveSessionState(id, { key, value });
         if (
           import.meta.env.DEV &&
-          response.secret_scan_warnings?.length > 0
+          (response.secret_scan_warnings?.length ?? 0) > 0
         ) {
           console.warn(
             "Secret scan warnings for key:",
             key,
-            response.secret_scan_warnings.map((w) => w.pattern_name)
+            response.secret_scan_warnings!.map((w) => w.pattern_name)
           );
         }
       } catch (err) {
@@ -186,11 +186,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         const response = await saveSessionState(id, { items });
         if (
           import.meta.env.DEV &&
-          response.secret_scan_warnings?.length > 0
+          (response.secret_scan_warnings?.length ?? 0) > 0
         ) {
           console.warn(
             "Secret scan warnings (batch):",
-            response.secret_scan_warnings.map((w) => w.pattern_name)
+            response.secret_scan_warnings!.map((w) => w.pattern_name)
           );
         }
       } catch (err) {

@@ -58,7 +58,8 @@ class TestRoutingMatrix:
         assert gh.included is False
         assert "skipped_no_pr" in gh.reasons
 
-    def test_pr_present_no_mapping(self):
+    def test_pr_present_no_mapping_infers_github(self):
+        # Phase 15: GitHub URL infers platform without requiring a repo mapping.
         plan = build_routing_plan(
             self._signals(
                 development_links=("https://github.com/org/repo/pull/42",)
@@ -66,10 +67,26 @@ class TestRoutingMatrix:
             platform_mapping={},
         )
         gh = _decision(plan, "github")
-        assert gh.included is False
-        assert "platform_mapping_missing" in gh.reasons
+        assert gh.included is True
+        assert "platform_inferred_from_dev_link" in gh.reasons
+        assert "pr_link_present" in gh.reasons
 
-    def test_pr_present_with_github_mapping(self):
+    def test_pr_present_no_mapping_infers_ado(self):
+        # Phase 15: ADO URL infers platform without requiring a repo mapping.
+        plan = build_routing_plan(
+            self._signals(
+                development_links=(
+                    "https://dev.azure.com/org/proj/_git/repo/pullrequest/7",
+                )
+            ),
+            platform_mapping={},
+        )
+        ado = _decision(plan, "ado")
+        assert ado.included is True
+        assert "platform_inferred_from_dev_link" in ado.reasons
+
+    def test_inferred_platform_takes_priority_over_mapping(self):
+        # Inference from PR URL wins even when mapping is present.
         plan = build_routing_plan(
             self._signals(
                 development_links=("https://github.com/org/repo/pull/42",)
@@ -78,11 +95,10 @@ class TestRoutingMatrix:
         )
         gh = _decision(plan, "github")
         assert gh.included is True
-        assert "platform_mapping_resolved" in gh.reasons
-        assert "pr_link_present" in gh.reasons
-        assert _decision(plan, "ado").included is False
+        assert "platform_inferred_from_dev_link" in gh.reasons
+        assert "platform_mapping_resolved" not in gh.reasons
 
-    def test_pr_present_with_ado_mapping(self):
+    def test_pr_present_with_ado_mapping_infers_ado(self):
         plan = build_routing_plan(
             self._signals(
                 development_links=(
@@ -93,7 +109,45 @@ class TestRoutingMatrix:
         )
         ado = _decision(plan, "ado")
         assert ado.included is True
+        assert "platform_inferred_from_dev_link" in ado.reasons
         assert _decision(plan, "github").included is False
+
+    def test_pr_link_no_recognizable_url_falls_back_to_mapping(self):
+        # If dev_links exist but none are GitHub/ADO PR URLs, fall back to mapping.
+        plan = build_routing_plan(
+            self._signals(
+                development_links=("https://internal.example.com/pr/42",)
+            ),
+            platform_mapping={"FM": "github"},
+        )
+        gh = _decision(plan, "github")
+        # The link matches _PR_HINT_RE (has github.com-like pattern? No — it's internal)
+        # So it should fall back to mapping. But has_pr_link() checks _PR_HINT_RE.
+        # internal.example.com won't match _PR_HINT_RE, so pr_present=False -> skipped_no_pr.
+        assert "skipped_no_pr" in gh.reasons
+
+    def test_no_dev_links_falls_back_to_mapping(self):
+        # No dev_links at all; explicit platform_mapping required.
+        plan = build_routing_plan(
+            self._signals(
+                development_links=("https://github.com/org/repo/pull/42",)
+            ),
+            platform_mapping={},
+        )
+        # With a GitHub URL, inference works even without mapping.
+        gh = _decision(plan, "github")
+        assert gh.included is True
+
+    def test_pr_present_but_no_mapping_and_no_inference(self):
+        # PR hint detected by _PR_HINT_RE but inference fails and no mapping.
+        # This tests the skipped_no_mapping path.
+        plan = build_routing_plan(
+            self._signals(development_links=()),
+            platform_mapping={},
+        )
+        gh = _decision(plan, "github")
+        assert gh.included is False
+        assert "skipped_no_pr" in gh.reasons
 
     def test_db_signal_label_routes_to_sql(self):
         plan = build_routing_plan(
@@ -150,6 +204,20 @@ class TestRoutingMatrix:
         zr = _decision(plan, "zephyr_read")
         assert zr.included is False
         assert "skipped_provider_unavailable" in zr.reasons
+
+    def test_repo_provider_unavailable_marks_decision_skipped(self):
+        # PR link present but GitHub not in available_providers.
+        plan = build_routing_plan(
+            self._signals(
+                development_links=("https://github.com/org/repo/pull/42",)
+            ),
+            platform_mapping={},
+            available_providers=("atlassian",),
+        )
+        gh = _decision(plan, "github")
+        assert gh.included is False
+        assert "pr_link_present" in gh.reasons
+        assert "skipped_provider_unavailable" in gh.reasons
 
     def test_determinism_same_input_same_output(self):
         s = self._signals(

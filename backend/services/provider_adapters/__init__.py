@@ -18,7 +18,7 @@ from .base import (
 from .atlassian import AtlassianTicketAdapter
 from .github import GithubRestAdapter, parse_github_pr
 from .ado import AdoRestAdapter, parse_ado_pr
-from .sql_server import SqlServerStubAdapter
+from .sql_server import SqlServerRestAdapter, SqlServerStubAdapter
 from .zephyr_read import ZephyrRestReadAdapter
 
 __all__ = [
@@ -31,6 +31,7 @@ __all__ = [
     "GithubRestAdapter",
     "ProviderAdapter",
     "SqlServerAdapter",
+    "SqlServerRestAdapter",
     "SqlServerStubAdapter",
     "ZephyrReadAdapter",
     "ZephyrRestReadAdapter",

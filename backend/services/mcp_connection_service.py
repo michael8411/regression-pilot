@@ -75,6 +75,18 @@ def _row_to_connection(
     auto_list = _decrypt_list(
         row["auto_approve"], "mcp_auto_approve_decrypt_failed", row["id"]
     )
+    try:
+        from backend.services.mcp.managed_connections import (
+            is_managed_id,
+            get_managed_auto_approve,
+        )
+    except ImportError:  # pragma: no cover
+        from services.mcp.managed_connections import (
+            is_managed_id,
+            get_managed_auto_approve,
+        )
+    if is_managed_id(row["id"]):
+        auto_list = get_managed_auto_approve(row["id"])
 
     # Phase 4: transport/url were added later via migration; treat them as
     # optional when reading legacy rows fetched from older schemas.
@@ -310,6 +322,69 @@ async def patch_connection(
     return await get_connection_by_id(
         conn_id, runtime_status=_idle_status, runtime_errors=_no_error
     )
+
+
+async def resolve_runtime_env(conn: "McpConnection") -> dict[str, str]:
+    """Phase 18 — return the env dict that should be passed to the child
+    process when spawning an MCP server.
+
+    Manual connections (`!is_managed_id`) return their stored encrypted env
+    unchanged. Managed connections inject fresh provider tokens/settings
+    from `identity_service` so we never persist short-lived OAuth tokens.
+
+    Never logs raw token values; uses a short fingerprint for traceability.
+    """
+    try:
+        from backend.services.mcp.managed_connections import (
+            MANAGED_PROVIDERS,
+            is_managed_id,
+        )
+        from backend.services.auth import identity_service
+    except ImportError:  # pragma: no cover
+        from services.mcp.managed_connections import (
+            MANAGED_PROVIDERS,
+            is_managed_id,
+        )
+        from services.auth import identity_service
+
+    if not is_managed_id(conn.id):
+        return dict(conn.env)
+
+    cfg = MANAGED_PROVIDERS[conn.id]
+    provider = cfg["provider"]
+    env: dict[str, str] = dict(conn.env)
+
+    if provider == "atlassian":
+        tok = identity_service.get_provider_token("atlassian")
+        if not tok or not tok.ok:
+            raise PermissionError(f"managed_mcp_token_unavailable:{provider}")
+        env["JIRA_URL"] = tok.metadata.get("site_url", "")
+        env["JIRA_USERNAME"] = tok.metadata.get("username", "")
+        env["JIRA_API_TOKEN"] = tok.access_token
+    elif provider == "github":
+        tok = identity_service.get_provider_token("github")
+        if not tok or not tok.ok:
+            raise PermissionError(f"managed_mcp_token_unavailable:{provider}")
+        env["GITHUB_PERSONAL_ACCESS_TOKEN"] = tok.access_token
+    elif provider == "ado":
+        tok = identity_service.get_provider_token("ado")
+        if not tok or not tok.ok:
+            raise PermissionError(f"managed_mcp_token_unavailable:{provider}")
+        env["ADO_ORG"] = tok.metadata.get("org", "")
+        env["ADO_ACCESS_TOKEN"] = tok.access_token
+        env["ADO_AUTH_MODE"] = tok.metadata.get("auth_mode", "pat")
+    elif provider == "sql_server":
+        # SQL MCP reads connection-string config from backend settings
+        # directly; no token injection here.
+        pass
+
+    logger.info(
+        "managed_mcp_token_injected",
+        connection_id=conn.id,
+        provider=provider,
+        env_key_count=len([k for k in env if k]),
+    )
+    return env
 
 
 async def delete_connection(conn_id: str) -> bool:

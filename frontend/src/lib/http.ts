@@ -1,26 +1,13 @@
 /**
  * Phase 07 — single source of truth for frontend HTTP request boilerplate.
  *
- * Before this module, every component-level `api.ts` resolved the API base
- * URL on its own (`import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8000"`),
- * and each implemented its own error model. That made the audit
- * `rg "VITE_API_BASE|const BASE = \"http://127.0.0.1:8000\""` light up in
- * seven places.
- *
- * Callers should now do:
- *
- *     import { http } from "@/lib/http";
- *     const data = await http<MyType>("/some/endpoint");
- *     const created = await http<Foo>("/foo", { method: "POST", body });
- *
- * Or, when raw access to `Response` is required (e.g. streaming):
- *
- *     import { apiUrl } from "@/lib/http";
- *     const resp = await fetch(apiUrl("/ai/chat/stream"), { ... });
- *
- * The base URL still falls back to `http://127.0.0.1:8000` for local dev,
- * but the resolution lives in exactly one place.
+ * Every backend call goes through `backendFetch`, which adds the per-launch
+ * X-Testdeck-Auth header. For streaming endpoints that need raw Response
+ * access, callers should import { backendFetch } from "@/lib/backendAuth"
+ * and use it directly with apiUrl().
  */
+
+import { backendFetch } from "@/lib/backendAuth";
 
 /** Resolved base URL for the backend. Vite envs are inlined at build time. */
 export const API_BASE: string =
@@ -64,12 +51,12 @@ export async function http<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
-  const res = await fetch(apiUrl(path), {
+  const res = await backendFetch(apiUrl(path), {
+    ...init,
     headers: {
       "content-type": "application/json",
       ...(init.headers ?? {}),
     },
-    ...init,
   });
 
   if (!res.ok) {

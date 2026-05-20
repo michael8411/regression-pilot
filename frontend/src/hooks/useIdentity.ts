@@ -5,6 +5,7 @@ import type {
   OAuthProvider,
   StartOAuthResponse,
 } from "@/types/identity";
+import { backendFetch } from "@/lib/backendAuth";
 
 const ROOT =
   (import.meta.env.VITE_API_BASE as string | undefined) ??
@@ -48,7 +49,7 @@ export function useIdentity() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${ROOT}/auth/me`);
+      const res = await backendFetch(`${ROOT}/auth/me`);
       if (!res.ok) throw new Error(`auth/me ${res.status}`);
       const data: IdentityStatus = await res.json();
       setStatus(data);
@@ -96,7 +97,7 @@ export function useIdentity() {
 
   const startSignIn = useCallback(async (): Promise<void> => {
     setConfigMissing(null);
-    const res = await fetch(`${ROOT}/auth/start`, { method: "POST" });
+    const res = await backendFetch(`${ROOT}/auth/start`, { method: "POST" });
     if (res.status === 409) {
       const body = (await res
         .json()
@@ -113,7 +114,7 @@ export function useIdentity() {
   const reconnectProvider = useCallback(
     async (provider: OAuthProvider): Promise<void> => {
       setConfigMissing(null);
-      const res = await fetch(
+      const res = await backendFetch(
         `${ROOT}/auth/reconnect/${encodeURIComponent(provider)}`,
         { method: "POST" },
       );
@@ -133,7 +134,7 @@ export function useIdentity() {
   );
 
   const signOut = useCallback(async (): Promise<void> => {
-    await fetch(`${ROOT}/auth/signout`, { method: "POST" });
+    await backendFetch(`${ROOT}/auth/signout`, { method: "POST" });
     await refresh();
   }, [refresh]);
 

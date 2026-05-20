@@ -130,10 +130,12 @@ class RoutingDecisionEnvelope(BaseModel):
 
 
 class ContextMetadataEnvelope(BaseModel):
-    """Diagnostics returned alongside generation output (Phase 1).
+    """Diagnostics returned alongside generation output.
 
     Surfaces tool trace + budget stats + routing reasons so the UI and
-    telemetry can show *why* a generation chose its context.
+    telemetry can show *why* a generation chose its context. The optional
+    `development_links_diagnostics` carries safe per-probe details from
+    Jira's dev-status API when the orchestrator re-fetched the ticket.
     """
 
     providers_called: list[str] = Field(default_factory=list)
@@ -144,6 +146,7 @@ class ContextMetadataEnvelope(BaseModel):
     per_section_chars: dict[str, int] = Field(default_factory=dict)
     hard_cap_chars: int = 0
     truncated_sections: list[str] = Field(default_factory=list)
+    development_links_diagnostics: Optional[dict] = None
 
 
 class LiveGenerateResponse(BaseModel):

@@ -515,3 +515,190 @@ class TestActivityRoutes:
         clear = live_client.delete("/live/activity")
         assert clear.json()["deleted"] >= 1
         assert live_client.get("/live/activity").json() == []
+class TestLiveGenerateEnrichment:
+    """Phase 20: re-fetch enriched ticket by key before routing."""
+
+    def test_routed_path_refetches_ticket(self, live_client, monkeypatch):
+        import services.ai_service as ai
+        import services.jira_service as jira_svc
+        import services.context_orchestrator as orch
+
+        seen_for_routing: dict = {}
+
+        async def fake_get_by_keys(keys):
+            assert keys == ["FM-1"]
+            return [
+                {
+                    "key": "FM-1",
+                    "id": "10001",
+                    "summary": "Enriched",
+                    "development_links": ["https://github.com/o/r/pull/9"],
+                    "pull_requests": [
+                        {
+                            "id": "github:o/r:9",
+                            "provider": "github",
+                            "url": "https://github.com/o/r/pull/9",
+                            "title": "Enriched PR",
+                            "state": "open",
+                            "repository": "o/r",
+                            "number": 9,
+                            "updated_at": None,
+                            "source": "jira_dev_status",
+                        }
+                    ],
+                    "development_links_error": "",
+                    "development_links_diagnostics": {
+                        "source": "jira_dev_status",
+                        "issue_id": "10001",
+                        "issue_key": "FM-1",
+                        "probes": [
+                            {
+                                "provider_hint": "github",
+                                "application_type": "GitHub",
+                                "status": 200,
+                                "ok": True,
+                                "pull_request_count": 1,
+                                "duration_ms": 5,
+                                "error": "",
+                            }
+                        ],
+                        "selected_pull_request_count": 1,
+                        "selected_link_count": 1,
+                        "error": "",
+                    },
+                }
+            ]
+
+        async def fake_build_for_ticket(ticket, **_):
+            seen_for_routing["ticket"] = ticket
+            # Return a minimal-but-valid bundle.
+            from schemas.context_bundle_models import (
+                BudgetStats,
+                ContextBundle,
+                RoutingDecision,
+                TicketContext,
+                ToolTrace,
+            )
+            return ContextBundle(
+                ticket=TicketContext(
+                    key=ticket.get("key", ""),
+                    summary=ticket.get("summary", ""),
+                    development_links=list(ticket.get("development_links") or []),
+                ),
+                tool_trace=ToolTrace(
+                    routing_decisions=[
+                        RoutingDecision(
+                            provider="github",
+                            included=True,
+                            reasons=["pr_link_present"],
+                        )
+                    ],
+                ),
+                budget=BudgetStats(hard_cap_chars=1000),
+            )
+
+        async def fake_from_bundle(bundle, instructions):
+            return {"test_cases": [{"name": "ok"}]}
+
+        monkeypatch.setattr(jira_svc, "get_tickets_by_keys", fake_get_by_keys)
+        monkeypatch.setattr(orch, "build_for_ticket", fake_build_for_ticket)
+        monkeypatch.setattr(ai, "generate_test_cases_from_bundle", fake_from_bundle)
+
+        r = live_client.post(
+            "/live/generate",
+            json={"ticket": {"key": "FM-1", "summary": "stale board card"}},
+        )
+        assert r.status_code == 200
+        # The orchestrator must have received the enriched ticket, not the stale one.
+        assert seen_for_routing["ticket"]["summary"] == "Enriched"
+        assert seen_for_routing["ticket"]["development_links"] == [
+            "https://github.com/o/r/pull/9"
+        ]
+
+        body = r.json()
+        # Diagnostics surfaced in context_metadata.
+        diag = body["context_metadata"]["development_links_diagnostics"]
+        assert diag["selected_pull_request_count"] == 1
+        assert diag["probes"][0]["application_type"] == "GitHub"
+
+    def test_enrichment_failure_falls_back_with_warning(self, live_client, monkeypatch):
+        import services.ai_service as ai
+        import services.jira_service as jira_svc
+        import services.context_orchestrator as orch
+
+        async def fake_get_by_keys(keys):
+            raise RuntimeError("jira down")
+
+        async def fake_build_for_ticket(ticket, **_):
+            from schemas.context_bundle_models import (
+                BudgetStats,
+                ContextBundle,
+                TicketContext,
+                ToolTrace,
+            )
+            return ContextBundle(
+                ticket=TicketContext(key=ticket.get("key", "")),
+                tool_trace=ToolTrace(),
+                budget=BudgetStats(hard_cap_chars=1000),
+            )
+
+        async def fake_from_bundle(bundle, instructions):
+            return {"test_cases": []}
+
+        monkeypatch.setattr(jira_svc, "get_tickets_by_keys", fake_get_by_keys)
+        monkeypatch.setattr(orch, "build_for_ticket", fake_build_for_ticket)
+        monkeypatch.setattr(ai, "generate_test_cases_from_bundle", fake_from_bundle)
+
+        r = live_client.post(
+            "/live/generate",
+            json={"ticket": {"key": "FM-7", "summary": "card"}},
+        )
+        assert r.status_code == 200
+        errors = r.json()["context_metadata"]["errors"]
+        codes = {e.get("code") for e in errors}
+        assert "ticket_enrichment_failed" in codes
+
+    def test_no_development_links_recorded_as_warning(self, live_client, monkeypatch):
+        import services.ai_service as ai
+        import services.jira_service as jira_svc
+        import services.context_orchestrator as orch
+
+        async def fake_get_by_keys(keys):
+            return [
+                {
+                    "key": "FM-2",
+                    "id": "10002",
+                    "summary": "Plain",
+                    "development_links": [],
+                    "pull_requests": [],
+                    "development_links_error": "",
+                }
+            ]
+
+        async def fake_build_for_ticket(ticket, **_):
+            from schemas.context_bundle_models import (
+                BudgetStats,
+                ContextBundle,
+                TicketContext,
+                ToolTrace,
+            )
+            return ContextBundle(
+                ticket=TicketContext(key=ticket.get("key", "")),
+                tool_trace=ToolTrace(),
+                budget=BudgetStats(hard_cap_chars=1000),
+            )
+
+        async def fake_from_bundle(bundle, instructions):
+            return {"test_cases": []}
+
+        monkeypatch.setattr(jira_svc, "get_tickets_by_keys", fake_get_by_keys)
+        monkeypatch.setattr(orch, "build_for_ticket", fake_build_for_ticket)
+        monkeypatch.setattr(ai, "generate_test_cases_from_bundle", fake_from_bundle)
+
+        r = live_client.post(
+            "/live/generate",
+            json={"ticket": {"key": "FM-2"}},
+        )
+        assert r.status_code == 200
+        codes = {e.get("code") for e in r.json()["context_metadata"]["errors"]}
+        assert "no_development_links" in codes

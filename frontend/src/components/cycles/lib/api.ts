@@ -27,20 +27,24 @@ async function jsonOrThrow<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function cyclesFetch(url: string, init?: RequestInit): Promise<Response> {
+  return backendFetch(url, init);
+}
+
 export async function listCycles(
   includeArchived = false,
 ): Promise<CycleSummary[]> {
   const q = includeArchived ? "?includeArchived=true" : "";
-  return jsonOrThrow(await fetch(`${BASE}${q}`));
+  return jsonOrThrow(await cyclesFetch(`${BASE}${q}`));
 }
 
 export async function getCycle(id: string): Promise<Cycle> {
-  return jsonOrThrow(await fetch(`${BASE}/${encodeURIComponent(id)}`));
+  return jsonOrThrow(await cyclesFetch(`${BASE}/${encodeURIComponent(id)}`));
 }
 
 export async function createCycle(input: CycleCreate): Promise<Cycle> {
   return jsonOrThrow(
-    await fetch(BASE, {
+    await cyclesFetch(BASE, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(input),
@@ -53,7 +57,7 @@ export async function patchCycle(
   patch: CyclePatch,
 ): Promise<Cycle> {
   return jsonOrThrow(
-    await fetch(`${BASE}/${encodeURIComponent(id)}`, {
+    await cyclesFetch(`${BASE}/${encodeURIComponent(id)}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(patch),
@@ -62,7 +66,7 @@ export async function patchCycle(
 }
 
 export async function deleteCycle(id: string): Promise<void> {
-  const res = await fetch(`${BASE}/${encodeURIComponent(id)}`, {
+  const res = await cyclesFetch(`${BASE}/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
   if (!res.ok) throw new Error(`Cycle delete failed: ${res.status}`);
@@ -70,7 +74,7 @@ export async function deleteCycle(id: string): Promise<void> {
 
 export async function duplicateCycle(id: string): Promise<Cycle> {
   return jsonOrThrow(
-    await fetch(`${BASE}/${encodeURIComponent(id)}/duplicate`, {
+    await cyclesFetch(`${BASE}/${encodeURIComponent(id)}/duplicate`, {
       method: "POST",
     }),
   );
@@ -81,7 +85,7 @@ export async function runCycle(
   body: CycleRunRequest = {},
 ): Promise<CycleRun> {
   return jsonOrThrow(
-    await fetch(`${BASE}/${encodeURIComponent(id)}/run`, {
+    await cyclesFetch(`${BASE}/${encodeURIComponent(id)}/run`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
@@ -91,6 +95,6 @@ export async function runCycle(
 
 export async function listRuns(id: string): Promise<CycleRun[]> {
   return jsonOrThrow(
-    await fetch(`${BASE}/${encodeURIComponent(id)}/runs`),
+    await cyclesFetch(`${BASE}/${encodeURIComponent(id)}/runs`),
   );
 }

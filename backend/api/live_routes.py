@@ -1,5 +1,6 @@
 from typing import Optional
 
+import structlog
 from fastapi import APIRouter, HTTPException
 
 try:
@@ -23,6 +24,7 @@ try:
     from backend.services import (
         ai_service,
         context_orchestrator,
+        jira_service,
         live_artifact_service,
         live_board_service,
         live_publish_service,
@@ -51,6 +53,7 @@ except ImportError:  # pragma: no cover - supports running from backend/ as scri
     from services import (
         ai_service,
         context_orchestrator,
+        jira_service,
         live_artifact_service,
         live_board_service,
         live_publish_service,
@@ -58,6 +61,83 @@ except ImportError:  # pragma: no cover - supports running from backend/ as scri
     )
     from services.context_orchestrator import AtlassianContextRequired
     from utils.http_errors import upstream_error
+
+
+_logger = structlog.get_logger("testdeck.live_routes")
+
+
+async def _load_generation_ticket(input_ticket: dict) -> tuple[dict, dict | None]:
+    """Re-fetch the ticket by key so dev-status enrichment runs before routing.
+
+    Returns (ticket_for_generation, warning_metadata).
+      - ticket_for_generation: enriched ticket when re-fetch succeeds, else input.
+      - warning_metadata: None on success, otherwise a small dict the caller
+        appends to context_metadata.errors so the UI can explain why PR
+        context wasn't used.
+
+    Never raises — a Jira failure must not abort generation.
+    """
+    key = str(input_ticket.get("key") or "").strip()
+    if not key:
+        return input_ticket, None
+    try:
+        tickets = await jira_service.get_tickets_by_keys([key])
+    except Exception as exc:
+        _logger.warning(
+            "live_generate_ticket_enrichment_failed",
+            ticket_key=key,
+            error_class=type(exc).__name__,
+        )
+        return input_ticket, {
+            "provider": "atlassian",
+            "code": "ticket_enrichment_failed",
+            "message": "Could not re-fetch ticket with development links",
+        }
+    if not tickets:
+        return input_ticket, {
+            "provider": "atlassian",
+            "code": "ticket_enrichment_failed",
+            "message": "Ticket not found on re-fetch",
+        }
+    enriched = tickets[0]
+    # Carry forward any caller-supplied fields the enriched copy might miss
+    # (e.g. acceptance_criteria typed in the UI before generation).
+    merged = {**input_ticket, **enriched}
+    return merged, None
+
+
+def _development_link_warnings(ticket: dict) -> list[dict]:
+    """Translate ticket-level development link state into context_metadata errors."""
+    warnings: list[dict] = []
+    links = ticket.get("development_links") or []
+    pull_requests = ticket.get("pull_requests") or []
+    dev_error = (ticket.get("development_links_error") or "").strip()
+
+    if dev_error and not pull_requests:
+        warnings.append(
+            {
+                "provider": "atlassian",
+                "code": "development_links_unavailable",
+                "message": dev_error,
+            }
+        )
+    elif not links and not pull_requests:
+        warnings.append(
+            {
+                "provider": "atlassian",
+                "code": "no_development_links",
+                "message": "No PR links found on the ticket",
+            }
+        )
+    elif links and not pull_requests:
+        warnings.append(
+            {
+                "provider": "atlassian",
+                "code": "development_links_unparseable",
+                "message": "Development links present but no PR could be parsed",
+            }
+        )
+    return warnings
 
 
 router = APIRouter(prefix="/live", tags=["live"])
@@ -129,10 +209,14 @@ async def delete_board(board_id: str):
 async def live_generate(req: LiveGenerateRequest):
     """Generate test cases for a single ticket. Skips grouping.
 
-    Phase 3: routes through the context orchestrator by default and
-    returns a `context_metadata` envelope so the UI can render the
-    "Using tools" indicator and surface budget/diagnostics. The legacy
-    direct-ticket path is preserved behind `use_context_bundle=False`.
+    Routes through the context orchestrator by default and returns a
+    `context_metadata` envelope so the UI can show the "Using tools"
+    indicator and PR discovery state. The legacy direct-ticket path stays
+    available behind `use_context_bundle=False`.
+
+    Board-card tickets arrive without dev-status enrichment, so this
+    endpoint re-fetches the ticket by key before routing to guarantee
+    consistent PR discovery whether the caller is a board or drawer.
     """
     try:
         ticket_key = str(req.ticket.get("key") or "")
@@ -152,8 +236,11 @@ async def live_generate(req: LiveGenerateRequest):
 
         with obs.request_scope("live"):
             timer = obs.Timer()
+            ticket_for_gen, enrichment_warning = await _load_generation_ticket(
+                req.ticket
+            )
             try:
-                bundle = await context_orchestrator.build_for_ticket(req.ticket)
+                bundle = await context_orchestrator.build_for_ticket(ticket_for_gen)
             except AtlassianContextRequired as exc:
                 # Atlassian is the source of truth — abort generation rather
                 # than serve a low-quality result without the ticket.
@@ -168,6 +255,13 @@ async def live_generate(req: LiveGenerateRequest):
                 duration_ms=timer.ms(),
                 routed=True,
             )
+
+            extra_errors: list[dict] = []
+            if enrichment_warning:
+                extra_errors.append(enrichment_warning)
+            extra_errors.extend(_development_link_warnings(ticket_for_gen))
+
+            diag = ticket_for_gen.get("development_links_diagnostics")
             meta = ContextMetadataEnvelope(
                 providers_called=list(bundle.tool_trace.providers_called),
                 routing_decisions=[
@@ -179,12 +273,14 @@ async def live_generate(req: LiveGenerateRequest):
                     for d in bundle.tool_trace.routing_decisions
                 ],
                 latency_ms=dict(bundle.tool_trace.latency_ms),
-                errors=[e.model_dump() for e in bundle.tool_trace.errors],
+                errors=[e.model_dump() for e in bundle.tool_trace.errors] + extra_errors,
                 input_chars=bundle.budget.input_chars,
                 per_section_chars=dict(bundle.budget.per_section_chars),
                 hard_cap_chars=bundle.budget.hard_cap_chars,
                 truncated_sections=list(bundle.budget.truncated_sections),
+                development_links_diagnostics=diag if isinstance(diag, dict) else None,
             )
+
             return {
                 "test_cases": cases.get("test_cases", []),
                 "context_metadata": meta.model_dump(),

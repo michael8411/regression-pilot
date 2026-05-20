@@ -17,19 +17,21 @@ def db_path(tmp_path):
 
 @pytest.fixture
 def mcp_client(fake_keyring, db_path, tmp_path, monkeypatch):
-    import db.connection as conn_mod
+    import backend.db.connection as conn_mod
+    import db.connection as compat_conn_mod
     monkeypatch.setattr(conn_mod, "DB_PATH", db_path)
+    monkeypatch.setattr(compat_conn_mod, "DB_PATH", db_path)
 
-    from db.init import init_db
+    from backend.db.init import init_db
     asyncio.run(init_db())
 
     monkeypatch.setenv("PYTHONPATH", str(REPO_BACKEND))
 
-    import services.mcp.runtime as rt_mod
+    import backend.services.mcp.runtime as rt_mod
     rt_mod.reset_runtime_for_tests()
     monkeypatch.setenv("TESTDECK_MCP_DATA_DIR", str(tmp_path / "mcp-data"))
 
-    from api.mcp_routes import router
+    from backend.api.mcp_routes import router
     app = FastAPI()
     app.include_router(router)
     client = TestClient(app)
@@ -68,8 +70,8 @@ class TestCRUD:
         assert sorted(body["envKeys"]) == ["PATH", "TOKEN"]
 
         listed = mcp_client.get("/mcp/connections").json()
-        assert len(listed) == 1
-        item = listed[0]
+        item = next((c for c in listed if c["id"] == body["id"]), None)
+        assert item is not None
         assert item["env"] == {}
         assert sorted(item["envKeys"]) == ["PATH", "TOKEN"]
 

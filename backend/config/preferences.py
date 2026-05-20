@@ -2,6 +2,11 @@ import copy
 import json
 from pathlib import Path
 
+try:
+    from backend.config.paths import preferences_path as _paths_preferences_path
+except ImportError:
+    from config.paths import preferences_path as _paths_preferences_path
+
 DEFAULT_PREFERENCES = {
     "theme": "dark",
     "project_scope": [],
@@ -13,7 +18,8 @@ DEFAULT_PREFERENCES = {
     "export_format": "json",
 }
 
-PREFERENCES_PATH = Path(__file__).resolve().parent.parent / "preferences.json"
+# Computed at module load; callers may pass an explicit path to override.
+PREFERENCES_PATH: Path = _paths_preferences_path()
 
 
 def read_preferences(path: Path = PREFERENCES_PATH) -> dict:

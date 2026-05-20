@@ -4,6 +4,8 @@ import { ConversationList } from "./ConversationList";
 import { ConversationProvider } from "./ConversationProvider";
 import { ConversationThread } from "./ConversationThread";
 import { ContextPicker } from "./ContextPicker";
+import { AssistantToolStatusBar } from "./AssistantToolStatusBar";
+import { McpConnectionsProvider } from "@/components/mcp";
 import { useRoute } from "@/contexts/RouteContext";
 import {
   useRegisterCommand,
@@ -37,25 +39,30 @@ export function AssistantWorkspace() {
   useRegisterCommand(newConversationCommand);
 
   return (
-    <ConversationProvider conversationId={conversationId}>
-      <div className="flex h-full overflow-hidden">
-        <div className="w-[260px] shrink-0 bg-surface">
-          <ConversationList selectedId={conversationId} />
-        </div>
-        <div className="flex-1 flex flex-col min-w-0 bg-surface">
-          {conversationId ? (
-            <ConversationThread />
-          ) : (
-            <NoConversationSelected />
+    <McpConnectionsProvider>
+      <ConversationProvider conversationId={conversationId}>
+        <div className="flex h-full overflow-hidden">
+          <div className="w-[260px] shrink-0 bg-surface">
+            <ConversationList selectedId={conversationId} />
+          </div>
+          <div className="flex-1 flex flex-col min-w-0 bg-surface">
+            {conversationId ? (
+              <>
+                <AssistantToolStatusBar />
+                <ConversationThread />
+              </>
+            ) : (
+              <NoConversationSelected />
+            )}
+          </div>
+          {conversationId && (
+            <div className="w-[280px] shrink-0 border-l border-subtle bg-surface">
+              <ContextPicker />
+            </div>
           )}
         </div>
-        {conversationId && (
-          <div className="w-[280px] shrink-0 border-l border-subtle bg-surface">
-            <ContextPicker />
-          </div>
-        )}
-      </div>
-    </ConversationProvider>
+      </ConversationProvider>
+    </McpConnectionsProvider>
   );
 }
 

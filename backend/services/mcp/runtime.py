@@ -189,19 +189,31 @@ class McpRuntime:
                     f"mcp_connection_disabled:{connection_id}"
                 )
 
+            # Phase 18 — managed connections inject fresh tokens here so
+            # short-lived OAuth values never live in conn.env on disk.
+            try:
+                env = await mcp_connection_service.resolve_runtime_env(conn)
+            except PermissionError as e:
+                if st is None:
+                    st = _State(client=None)
+                    self._states[connection_id] = st
+                st.client = None
+                st.last_error = str(e)
+                raise
+
             transport = getattr(conn, "transport", "stdio") or "stdio"
             client: McpAnyClient
             if transport == "http":
                 client = McpHttpClient(
                     connection_id=connection_id,
                     url=conn.url,
-                    env=dict(conn.env),
+                    env=env,
                 )
             elif transport == "sse":
                 client = McpSseClient(
                     connection_id=connection_id,
                     url=conn.url,
-                    env=dict(conn.env),
+                    env=env,
                 )
             else:
                 cwd = str(self._data_dir / connection_id)
@@ -209,7 +221,7 @@ class McpRuntime:
                     connection_id=connection_id,
                     command=conn.command,
                     args=list(conn.args),
-                    env=dict(conn.env),
+                    env=env,
                     cwd=cwd,
                 )
             try:

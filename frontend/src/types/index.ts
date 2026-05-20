@@ -72,8 +72,8 @@ export interface JiraTicket {
   epic_key?: string | null;
   parent_key?: string | null;
   component_name?: string | null;
-  development_links?: string[];
-  pull_requests?: LinkedPullRequest[];
+  development_links: string[];
+  pull_requests: LinkedPullRequest[];
   development_links_error?: string;
   development_links_diagnostics?: DevelopmentLinksDiagnostics;
 }

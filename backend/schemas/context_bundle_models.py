@@ -29,6 +29,7 @@ ProviderName = Literal[
 RoutingReasonCode = Literal[
     "always_first",
     "pr_link_present",
+    "platform_inferred_from_dev_link",
     "platform_mapping_resolved",
     "platform_mapping_missing",
     "db_signal_label",

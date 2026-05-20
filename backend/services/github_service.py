@@ -27,10 +27,25 @@ def _auth_headers(token: str) -> dict[str, str]:
     }
 
 
+def _preferred_token(explicit: str | None = None) -> str:
+    """Phase 17 — OAuth access token first, PAT fallback second."""
+    if explicit:
+        return explicit
+    try:
+        from backend.services.auth import identity_service
+        from backend.config.settings import get_settings as _gs
+    except ImportError:  # pragma: no cover
+        from services.auth import identity_service
+        from config.settings import get_settings as _gs
+    oauth_token = identity_service.get_oauth_access_token("github")
+    if oauth_token:
+        return oauth_token
+    return _gs().github_access_token
+
+
 async def test_connection(token: str | None = None) -> dict:
     """Validate the GitHub token by hitting `/user`."""
-    settings = get_settings()
-    tok = token or settings.github_access_token
+    tok = _preferred_token(token)
     if not tok:
         return {"ok": False, "error": "GitHub access token not configured"}
     try:
@@ -50,14 +65,14 @@ async def test_connection(token: str | None = None) -> dict:
 
 async def list_repo_suggestions(limit: int = 30) -> list[str]:
     """Return up to `limit` repo full names (owner/repo) accessible to the token."""
-    settings = get_settings()
-    if not settings.github_access_token:
+    tok = _preferred_token()
+    if not tok:
         return []
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(
                 f"{GITHUB_API}/user/repos",
-                headers=_auth_headers(settings.github_access_token),
+                headers=_auth_headers(tok),
                 params={"per_page": min(limit, 100), "sort": "updated"},
             )
         if resp.status_code != 200:

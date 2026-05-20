@@ -308,6 +308,46 @@ async def _resolve_attached_tickets(attachments: list[dict]) -> list[dict]:
         return []
 
 
+async def _resolve_user_message(history: list[dict]) -> str:
+    """Return the most recent user message content for tool-routing intent."""
+    for m in reversed(history):
+        if m.get("role") == "user":
+            return str(m.get("content") or "")
+    return ""
+
+
+async def _build_merged_tool_catalog(
+    conversation_id: str,
+    *,
+    history: list[dict],
+    attached_tool_refs: Optional[list[dict]],
+) -> list[dict]:
+    """Backend builds the authoritative catalog: managed providers (heuristic
+    selected) merged with any manually attached tools the frontend supplied."""
+    try:
+        from backend.services.mcp.tool_catalog_service import (
+            build_assistant_tool_catalog,
+        )
+    except ImportError:  # pragma: no cover
+        from services.mcp.tool_catalog_service import (
+            build_assistant_tool_catalog,
+        )
+    user_msg = await _resolve_user_message(history)
+    try:
+        return await build_assistant_tool_catalog(
+            conversation_id,
+            user_message=user_msg,
+            attached_tool_refs=attached_tool_refs or [],
+        )
+    except Exception as exc:
+        logger.warning(
+            "assistant_tool_catalog_build_failed",
+            conversation_id=conversation_id,
+            error_class=type(exc).__name__,
+        )
+        return list(attached_tool_refs or [])
+
+
 async def stream_assistant_reply(
     conversation_id: str,
     *,
@@ -329,10 +369,16 @@ async def stream_assistant_reply(
 
     tickets_payload = await _resolve_attached_tickets(convo["attachments"])
 
+    merged_catalog = await _build_merged_tool_catalog(
+        conversation_id,
+        history=history,
+        attached_tool_refs=tool_catalog,
+    )
+
     accumulated = ""
     try:
         async for chunk in ai_service.stream_chat_message(
-            history, tickets_payload, tool_catalog=tool_catalog
+            history, tickets_payload, tool_catalog=merged_catalog
         ):
             if isinstance(chunk, dict) and "tool_call" in chunk:
                 # Persist any text accumulated so far, then yield the tool
@@ -389,13 +435,21 @@ async def append_tool_message(
     if not await _conversation_exists(conversation_id):
         return None
 
+    try:
+        from backend.services.mcp.tool_output_budget import budget_tool_output
+    except ImportError:  # pragma: no cover
+        from services.mcp.tool_output_budget import budget_tool_output
+
+    raw_output = payload.get("output")
+    budgeted_output, budget_meta = budget_tool_output(raw_output) if raw_output is not None else (raw_output, None)
+
     blob = {
         "request_id": payload.get("request_id"),
         "tool": payload.get("tool"),
         "connection_id": payload.get("connection_id"),
         "status": payload.get("status"),
         "input": payload.get("input"),
-        "output": payload.get("output"),
+        "output": budgeted_output,
         "error": payload.get("error"),
         "duration_ms": payload.get("duration_ms"),
     }
@@ -413,6 +467,15 @@ async def append_tool_message(
             conversation_id=conversation_id,
             tool=blob["tool"],
             patterns=pattern_names,
+        )
+    if budget_meta and budget_meta.get("truncated"):
+        meta["budget"] = budget_meta
+        logger.info(
+            "assistant_tool_output_budgeted",
+            conversation_id=conversation_id,
+            tool=blob["tool"],
+            original_size_chars=budget_meta.get("original_size_chars"),
+            final_size_chars=budget_meta.get("final_size_chars"),
         )
 
     mid = str(uuid.uuid4())

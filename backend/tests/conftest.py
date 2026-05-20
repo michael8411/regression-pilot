@@ -47,6 +47,8 @@ _RELOAD_TARGETS: tuple[str, ...] = (
     "utils.crypto",
     "config.settings",
     "services.config_service",
+    "services.auth.oauth_base",
+    "services.auth.identity_service",
 )
 
 

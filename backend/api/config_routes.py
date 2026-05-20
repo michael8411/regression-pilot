@@ -47,6 +47,11 @@ _FIELD_TO_KEYRING_KEY: dict[str, str] = {
     "github_access_token": "github_access_token",
     "ado_org": "ado_org",
     "ado_access_token": "ado_access_token",
+    "sql_server_connection_string": "sql_server_connection_string",
+    "sql_server_database": "sql_server_database",
+    "sql_server_schema_allowlist": "sql_server_schema_allowlist",
+    "sql_server_table_allowlist": "sql_server_table_allowlist",
+    "sql_server_include_procs": "sql_server_include_procs",
 }
 
 _SERVICE_FIELDS: dict[str, list[str]] = {
@@ -55,6 +60,13 @@ _SERVICE_FIELDS: dict[str, list[str]] = {
     "ado": ["ado_org", "ado_access_token"],
     "gemini": ["gemini_api_key"],
     "zephyr": ["zephyr_base_url", "zephyr_api_token"],
+    "sql_server": [
+        "sql_server_connection_string",
+        "sql_server_database",
+        "sql_server_schema_allowlist",
+        "sql_server_table_allowlist",
+        "sql_server_include_procs",
+    ],
 }
 
 
@@ -77,7 +89,27 @@ async def config_status():
         "ai": {"configured": bool(settings.gemini_api_key)},
         "gemini": {"configured": bool(settings.gemini_api_key)},
         "zephyr": {"configured": bool(settings.zephyr_api_token)},
+        "sql_server": {
+            "configured": settings.sql_server_configured,
+            "database": settings.sql_server_database or None,
+            "schema_allowlist": settings.sql_server_schema_allowlist or None,
+            "include_procs": settings.sql_server_include_procs,
+        },
     }
+
+
+@router.get("/readiness")
+async def config_readiness():
+    """Readiness snapshot for the Settings UI.
+
+    Status-only; safe to return to the frontend. Never includes tokens,
+    connection strings, passwords, or raw env values.
+    """
+    try:
+        from backend.services import connection_readiness_service
+    except ImportError:
+        from services import connection_readiness_service
+    return await connection_readiness_service.get_readiness()
 
 
 @router.get("/preferences")
@@ -99,7 +131,11 @@ async def update_credentials(req: CredentialsUpdateRequest):
         if field not in _FIELD_TO_KEYRING_KEY:
             continue
         str_value = str(value.get_secret_value() if hasattr(value, "get_secret_value") else value)
-        updates[field] = str_value.rstrip("/") if field.endswith("_url") else str_value
+        if field.endswith("_url"):
+            str_value = str_value.rstrip("/")
+        elif isinstance(value, bool):
+            str_value = "true" if value else "false"
+        updates[field] = str_value
 
     if not updates:
         return {"updated": []}
@@ -201,6 +237,22 @@ async def test_ado():
             status_code=422, detail="Azure DevOps org or token not configured"
         )
     return await ado_service.test_connection()
+
+
+@router.get("/test-sql-server")
+async def test_sql_server():
+    """Return a safe, structured SQL Server readiness diagnostic.
+
+    Always returns 200 so the UI can render actionable status without
+    treating diagnostics as a transport failure. The response never
+    contains connection strings, passwords, or raw ODBC exception text.
+    """
+    try:
+        from backend.services.provider_adapters.sql_server import diagnose_sql_server
+    except ImportError:
+        from services.provider_adapters.sql_server import diagnose_sql_server
+
+    return await diagnose_sql_server()
 
 
 @router.get("/github/repos")

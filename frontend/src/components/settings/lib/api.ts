@@ -5,6 +5,7 @@
  * `/config/test-*`) are already wrapped in `@/lib/api`. The Data & privacy pane
  * adds `/config/data/export` and `/config/data/wipe`.
  */
+import { backendFetch } from "@/lib/backendAuth";
 
 import { API_BASE } from "@/lib/http";
 
@@ -27,6 +28,10 @@ async function jsonOrThrow<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function sfetch(path: string, init?: RequestInit): Promise<Response> {
+  return backendFetch(`${BASE}${path}`, init);
+}
+
 export interface DataExportResponse {
   version: number;
   exported_at: string;
@@ -35,9 +40,7 @@ export interface DataExportResponse {
 }
 
 export async function exportData(): Promise<DataExportResponse> {
-  return jsonOrThrow(
-    await fetch(`${BASE}/config/data/export`, { method: "POST" }),
-  );
+  return jsonOrThrow(await sfetch("/config/data/export", { method: "POST" }));
 }
 
 export async function wipeData(args: {
@@ -45,7 +48,7 @@ export async function wipeData(args: {
   keepCredentials: boolean;
 }): Promise<{ ok: boolean; credentials_cleared: number }> {
   return jsonOrThrow(
-    await fetch(`${BASE}/config/data/wipe`, {
+    await sfetch("/config/data/wipe", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(args),
@@ -61,11 +64,9 @@ export async function fetchRetentionCounts(): Promise<{
   mcpConnections: number;
   sessions: number;
 }> {
-  // Reuse existing list endpoints; ignore individual failures so the panel
-  // can still render partial data.
   async function safeCount(path: string): Promise<number> {
     try {
-      const res = await fetch(`${BASE}${path}`);
+      const res = await backendFetch(`${BASE}${path}`);
       if (!res.ok) return 0;
       const body = await res.json();
       return Array.isArray(body) ? body.length : 0;

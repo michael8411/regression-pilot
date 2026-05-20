@@ -1,3 +1,4 @@
+import shutil
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -8,6 +9,7 @@ import structlog
 
 try:
     from backend.api.ai_routes import router as ai_router
+    from backend.api.auth_routes import router as auth_router
     from backend.api.config_routes import router as config_router
     from backend.api.health_routes import router as health_router
     from backend.api.jira_routes import router as jira_router
@@ -19,13 +21,19 @@ try:
     from backend.api.cycle_routes import router as cycle_router
     from backend.api.project_repo_map_routes import router as repo_map_router
     from backend.services.mcp.runtime import get_runtime as get_mcp_runtime
+    from backend.services.mcp.managed_connections import (
+        ensure_managed_connections,
+    )
     from backend.config.logging_config import setup_logging
     from backend.config.settings import get_settings
+    from backend.config.paths import db_path, preferences_path, runtime_dir
     from backend.db.init import init_db
+    from backend.security.local_auth import LocalAuthMiddleware, LOCAL_AUTH_TOKEN
     from backend.services.config_service import migrate_env_to_keyring
     from backend.utils.crypto import get_encryptor
 except ImportError:  # pragma: no cover - supports running from backend/ as script
     from api.ai_routes import router as ai_router
+    from api.auth_routes import router as auth_router
     from api.config_routes import router as config_router
     from api.health_routes import router as health_router
     from api.jira_routes import router as jira_router
@@ -37,9 +45,14 @@ except ImportError:  # pragma: no cover - supports running from backend/ as scri
     from api.cycle_routes import router as cycle_router
     from api.project_repo_map_routes import router as repo_map_router
     from services.mcp.runtime import get_runtime as get_mcp_runtime
+    from services.mcp.managed_connections import (
+        ensure_managed_connections,
+    )
     from config.logging_config import setup_logging
     from config.settings import get_settings
+    from config.paths import db_path, preferences_path, runtime_dir
     from db.init import init_db
+    from security.local_auth import LocalAuthMiddleware, LOCAL_AUTH_TOKEN
     from services.config_service import migrate_env_to_keyring
     from utils.crypto import get_encryptor
 
@@ -52,6 +65,31 @@ setup_logging(
     quiet_external_loggers=is_dev,
 )
 logger = structlog.get_logger("testdeck.backend")
+
+
+def _migrate_legacy_data_files() -> None:
+    """Copy backend/testdeck.db and backend/preferences.json to app data dir on first run."""
+    backend_dir = Path(__file__).resolve().parent
+
+    old_db = backend_dir / "testdeck.db"
+    new_db = db_path()
+    if old_db.exists() and not new_db.exists():
+        shutil.copy2(old_db, new_db)
+        for sidecar in ("testdeck.db-wal", "testdeck.db-shm"):
+            old_sc = backend_dir / sidecar
+            if old_sc.exists() and not (new_db.parent / sidecar).exists():
+                shutil.copy2(old_sc, new_db.parent / sidecar)
+        logger.info("db_file_migrated_to_app_data")
+    elif old_db.exists():
+        logger.info("db_file_migration_skipped_existing_target")
+
+    old_prefs = backend_dir / "preferences.json"
+    new_prefs = preferences_path()
+    if old_prefs.exists() and not new_prefs.exists():
+        shutil.copy2(old_prefs, new_prefs)
+        logger.info("preferences_migrated_to_app_data")
+    elif old_prefs.exists():
+        logger.info("preferences_migration_skipped_existing_target")
 
 
 @asynccontextmanager
@@ -70,9 +108,24 @@ async def lifespan(app: FastAPI):
         settings = get_settings()
     get_encryptor()
     logger.info("encryptor_initialized")
+    _migrate_legacy_data_files()
     await init_db()
+    # Write per-launch auth token to runtime file so Tauri / dev tools can read it.
+    try:
+        _token_file = runtime_dir() / "backend-auth-token"
+        _token_file.write_text(LOCAL_AUTH_TOKEN, encoding="utf-8")
+        logger.info("backend_auth_token_written")
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("backend_auth_token_write_failed", error_class=type(exc).__name__)
     await get_mcp_runtime().start()
     logger.info("mcp_runtime_started")
+    try:
+        await ensure_managed_connections()
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning(
+            "managed_mcp_provisioning_failed",
+            error_class=type(exc).__name__,
+        )
     try:
         yield
     finally:
@@ -92,6 +145,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# LocalAuthMiddleware is added first so CORSMiddleware (added second) wraps it
+# outermost, handling OPTIONS preflight before auth enforcement.
+app.add_middleware(LocalAuthMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["tauri://localhost", "http://localhost:5173", "http://localhost:1420"],
@@ -101,6 +157,7 @@ app.add_middleware(
 )
 
 app.include_router(health_router)
+app.include_router(auth_router)
 app.include_router(config_router)
 app.include_router(jira_router)
 app.include_router(ai_router)

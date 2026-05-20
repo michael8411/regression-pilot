@@ -23,12 +23,18 @@ const PANES: SettingsPaneId[] = [
   "about",
 ];
 
+function paneEnabled(pane: SettingsPaneId): boolean {
+  return pane !== "repo-mapping" || isFeatureEnabled("repoMappingFallback");
+}
+
 function readPaneFromUrl(): SettingsPaneId {
   if (typeof window === "undefined") return "credentials";
   try {
     const params = new URLSearchParams(window.location.search);
     const candidate = params.get("pane") as SettingsPaneId | null;
-    return candidate && PANES.includes(candidate) ? candidate : "credentials";
+    return candidate && PANES.includes(candidate) && paneEnabled(candidate)
+      ? candidate
+      : "credentials";
   } catch {
     return "credentials";
   }
@@ -109,6 +115,7 @@ export function SettingsOverlay() {
 }
 
 function renderPane(pane: SettingsPaneId) {
+  if (!paneEnabled(pane)) return <ConnectionsPane />;
   switch (pane) {
     case "credentials":
       return <CredentialsPane />;

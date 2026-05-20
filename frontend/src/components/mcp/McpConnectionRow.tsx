@@ -23,6 +23,7 @@ export function McpConnectionRow({
   const [busy, setBusy] = useState<"test" | "toggle" | "delete" | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const isManaged = connection.id.startsWith("managed-");
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -132,12 +133,18 @@ export function McpConnectionRow({
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <Toggle
-            checked={connection.enabled}
-            onChange={handleToggle}
-            disabled={busy === "toggle"}
-            aria-label={`${connection.enabled ? "Disable" : "Enable"} ${connection.name}`}
-          />
+          {isManaged ? (
+            <Badge tone="neutral" size="sm">
+              managed
+            </Badge>
+          ) : (
+            <Toggle
+              checked={connection.enabled}
+              onChange={handleToggle}
+              disabled={busy === "toggle"}
+              aria-label={`${connection.enabled ? "Disable" : "Enable"} ${connection.name}`}
+            />
+          )}
           <Button
             size="sm"
             variant="ghost"
@@ -150,37 +157,41 @@ export function McpConnectionRow({
           <Button size="sm" variant="ghost" onClick={onShowTools}>
             Tools
           </Button>
-          <Button size="sm" variant="ghost" onClick={onEdit}>
-            Edit
-          </Button>
-          <div ref={menuRef} className="relative">
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setMenuOpen((v) => !v)}
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
-              aria-label="More actions"
-            >
-              <MoreHorizontal size={14} />
-            </Button>
-            {menuOpen && (
-              <div
-                role="menu"
-                className="absolute right-0 top-full mt-1 w-40 rounded-lg border border-subtle bg-surface-elevated shadow-lg z-30"
-              >
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={handleDelete}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-[12px] text-err hover:bg-err/10"
+          {!isManaged && (
+            <>
+              <Button size="sm" variant="ghost" onClick={onEdit}>
+                Edit
+              </Button>
+              <div ref={menuRef} className="relative">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setMenuOpen((v) => !v)}
+                  aria-haspopup="menu"
+                  aria-expanded={menuOpen}
+                  aria-label="More actions"
                 >
-                  <Trash2 size={12} />
-                  Delete
-                </button>
+                  <MoreHorizontal size={14} />
+                </Button>
+                {menuOpen && (
+                  <div
+                    role="menu"
+                    className="absolute right-0 top-full mt-1 w-40 rounded-lg border border-subtle bg-surface-elevated shadow-lg z-30"
+                  >
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={handleDelete}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-[12px] text-err hover:bg-err/10"
+                    >
+                      <Trash2 size={12} />
+                      Delete
+                    </button>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </>
+          )}
         </div>
       </div>
     </li>

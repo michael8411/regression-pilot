@@ -6,6 +6,7 @@ import { TicketPicker } from "./pickers/TicketPicker";
 import { TestCasePicker } from "./pickers/TestCasePicker";
 import { SessionPicker } from "./pickers/SessionPicker";
 import { ToolPickerTab } from "@/components/mcp";
+import { ManagedToolsPanel } from "./ManagedToolsPanel";
 import { isFeatureEnabled } from "@/lib/featureFlags";
 import { clsx } from "clsx";
 
@@ -53,7 +54,10 @@ export function ContextPicker() {
             onRemove={(id) => void remove(id)}
           />
         ) : (
-          <ToolPickerTab />
+          <>
+            <ManagedToolsPanel />
+            <ToolPickerTab />
+          </>
         )}
       </div>
 

@@ -29,6 +29,7 @@ import { useOptionalLiveActivityFeed } from "./activity";
 import { DrawerHeader } from "./DrawerHeader";
 import { DrawerSummary } from "./DrawerSummary";
 import { DrawerDescription } from "./DrawerDescription";
+import { DrawerPullRequestsPanel } from "./DrawerPullRequestsPanel";
 import { CommentsThread } from "./CommentsThread";
 import { CommentComposer } from "./CommentComposer";
 import {
@@ -188,6 +189,7 @@ export function TicketDrawer({ ticketKey, onClose }: Props) {
                 >
                   <DrawerSummary ticket={ticket} />
                   <DrawerDescription description={ticket.description} />
+                  <DrawerPullRequestsPanel ticket={ticket} />
                 </div>
               )}
 

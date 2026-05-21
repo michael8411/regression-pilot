@@ -5,12 +5,15 @@ import {
   listJiraVersionsForLive,
 } from "@/components/live/lib/api";
 import type { JiraProject, JiraVersion } from "@/types";
+import type { LiveBoardTemplate } from "@/types/live";
 
 interface Props {
   name: string;
   projectKey: string;
   versionName: string;
   pinned: boolean;
+  /** Layer 1 PR3 — which JQL template drives the board (workflow | qa_release). */
+  boardTemplate: LiveBoardTemplate;
   suggestedName: string;
   selectedCount: number;
   totalStatuses: number;
@@ -20,6 +23,7 @@ interface Props {
   onProjectChange: (next: string) => void;
   onVersionChange: (next: string) => void;
   onPinnedChange: (next: boolean) => void;
+  onBoardTemplateChange: (next: LiveBoardTemplate) => void;
   onCustomize: () => void;
   onRetryStatuses: () => void;
 }
@@ -30,6 +34,7 @@ export function QuickStep(props: Props) {
     projectKey,
     versionName,
     pinned,
+    boardTemplate,
     suggestedName,
     selectedCount,
     totalStatuses,
@@ -39,6 +44,7 @@ export function QuickStep(props: Props) {
     onProjectChange,
     onVersionChange,
     onPinnedChange,
+    onBoardTemplateChange,
     onCustomize,
     onRetryStatuses,
   } = props;
@@ -145,6 +151,28 @@ export function QuickStep(props: Props) {
         </p>
       </Field>
 
+      <Field label="Template">
+        <div className="flex gap-2">
+          <TemplateChoice
+            label="Workflow"
+            description="Full pipeline. No status filter."
+            active={boardTemplate === "workflow"}
+            onClick={() => onBoardTemplateChange("workflow")}
+          />
+          <TemplateChoice
+            label="QA release"
+            description="Restrict to QA statuses."
+            active={boardTemplate === "qa_release"}
+            onClick={() => onBoardTemplateChange("qa_release")}
+          />
+        </div>
+        <p className="mt-1 text-[10.5px] text-ink-faint">
+          {boardTemplate === "workflow"
+            ? "Renders every workflow column. Use QA only toggle on the board to filter."
+            : "Filters JQL to ready / testing / done QA statuses for the picked version."}
+        </p>
+      </Field>
+
       <Field label="Statuses">
         {!projectKey ? (
           <p className="text-[11px] text-ink-faint">
@@ -212,5 +240,34 @@ function Field({
       </label>
       {children}
     </div>
+  );
+}
+
+function TemplateChoice({
+  label,
+  description,
+  active,
+  onClick,
+}: {
+  label: string;
+  description: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={clsx(
+        "flex-1 text-left rounded-md border px-3 py-2 transition-colors",
+        active
+          ? "border-accent/[0.5] bg-accent/[0.08]"
+          : "border-subtle hover:border-ink-muted",
+      )}
+    >
+      <div className="text-[12px] font-semibold text-ink">{label}</div>
+      <div className="text-[10.5px] text-ink-faint mt-0.5">{description}</div>
+    </button>
   );
 }

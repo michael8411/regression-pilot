@@ -38,9 +38,12 @@ export function KanbanBoard({ onOpenTicket }: Props) {
 
   const initialDensity =
     (board.board?.view_prefs?.density as DensityKey | undefined) ?? "cozy";
+  // Layer 1 PR2: default to "all" so new boards land on the full workflow
+  // grid by default (matches the FM 3.2.0 QA mockup). Existing boards keep
+  // whatever they saved.
   const initialColumnMode =
     (board.board?.view_prefs?.boardColumnMode as ColumnModeKey | undefined) ??
-    "qa";
+    "all";
   const initialShowEmpty =
     board.board?.view_prefs?.showEmptyNonQaColumns ?? false;
   const initialLane: LiveBoardLaneGrouping =
@@ -179,11 +182,20 @@ export function KanbanBoard({ onOpenTicket }: Props) {
     );
   }
 
+  // Layer 1 PR2: render columns from the saved `workflowColumnOrder`
+  // when present (new + hydrated boards), falling back to the legacy
+  // `columns` array so older boards keep working until they hydrate.
+  const columnOrder =
+    board.board.profile?.workflowColumnOrder?.length
+      ? board.board.profile.workflowColumnOrder
+      : board.board.columns;
+
   const resolvedColumns: ResolvedColumn[] = resolveBoardColumns({
-    jiraColumns: board.board.columns,
+    columnOrder,
     byStatus: board.byStatus,
     mode: columnMode,
-    showEmptyNonQa: showEmpty,
+    showEmpty,
+    qaStatusOverride: board.board.profile?.qaStatusMap,
   });
 
   return (
@@ -215,7 +227,9 @@ export function KanbanBoard({ onOpenTicket }: Props) {
                   onOpen={onOpenTicket ?? (() => {})}
                   density={density}
                   dim={columnMode === "all" && col.bucket === "other"}
-                  slim={columnMode === "qa" && col.count === 0}
+                  // Any empty column renders slim so the workflow grid
+                  // stays stable left→right regardless of mode.
+                  slim={col.count === 0}
                 />
               ))}
             </div>
@@ -229,13 +243,14 @@ export function KanbanBoard({ onOpenTicket }: Props) {
                     laneLabel={lane.laneLabel}
                     laneIndex={idx}
                     tickets={lane.tickets}
-                    jiraColumns={board.board!.columns}
+                    columnOrder={columnOrder}
                     mode={columnMode}
-                    showEmptyNonQa={showEmpty}
+                    showEmpty={showEmpty}
                     density={density}
                     collapsed={collapsed.has(lane.laneKey)}
                     onToggle={() => toggleLane(lane.laneKey)}
                     onOpen={onOpenTicket ?? (() => {})}
+                    qaStatusOverride={board.board!.profile?.qaStatusMap}
                   />
                 ),
               )}

@@ -12,6 +12,7 @@ import * as api from "@/components/live/lib/api";
 import { useBoardTickets } from "./hooks/useBoardTickets";
 import { resolveAutoLaneGrouping } from "./board/lib/laneGrouping";
 import { defaultViewPrefs } from "./board-builder/lib/defaultBoardProfile";
+import { deriveWorkflowColumnOrder } from "./board-builder/lib/deriveWorkflowColumnOrder";
 import type { LiveBoard } from "@/types/live";
 import type { JiraTicket } from "@/types";
 
@@ -156,6 +157,77 @@ export function BoardProvider({
       .then((updated) => setBoard(updated))
       .catch(() => undefined);
   }, [board, response]);
+
+  // Layer 1 PR2 — one-shot legacy hydrate of `workflowColumnOrder`.
+  //
+  // Existing boards saved before PR1 have empty workflowColumnOrder. Without
+  // it, the resolver falls back to `board.columns` which may be just the QA
+  // subset (3 statuses) saved by the old builder. We fetch the project's
+  // full status list, derive the L→R order, then persist it once so future
+  // loads use the saved value directly.
+  const hydratedColumnsRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!board) return;
+    if (hydratedColumnsRef.current === board.id) return;
+    const profile = board.profile;
+    // Already hydrated — skip.
+    if (profile?.workflowColumnOrder && profile.workflowColumnOrder.length > 0) {
+      hydratedColumnsRef.current = board.id;
+      return;
+    }
+    // No project key on profile → nothing to fetch.
+    const projectKey = profile?.projectKey?.trim();
+    if (!projectKey) {
+      hydratedColumnsRef.current = board.id;
+      return;
+    }
+    hydratedColumnsRef.current = board.id;
+    let cancelled = false;
+    (async () => {
+      try {
+        const resp = await api.getJiraProjectStatuses(projectKey);
+        if (cancelled) return;
+        const statuses = resp.statuses.map((s) => ({
+          name: s.name,
+          category: s.category,
+          issueTypes: s.issue_types ?? [],
+        }));
+        const order = deriveWorkflowColumnOrder(
+          statuses,
+          resp.workflow_column_order,
+        );
+        if (order.length === 0) return;
+        const nextProfile = {
+          ...(profile ?? {
+            builderMode: "simple" as const,
+            projectKey,
+            versionName: "",
+            selectedStatuses: [],
+            qaStatusMap: { ready: [], testing: [], done: [] },
+            laneGrouping: "none" as const,
+            assigneeScope: "anyone" as const,
+            refreshIntervalSec: 60,
+            customJql: board.jql,
+          }),
+          workflowColumnOrder: order,
+        };
+        // Mirror to top-level `columns` so legacy readers that still go
+        // through `board.columns` see the same order.
+        const updated = await api.patchLiveBoard(board.id, {
+          profile: nextProfile,
+          columns: order,
+        });
+        if (!cancelled) setBoard(updated);
+      } catch {
+        // Hydration is best-effort. If the Jira fetch fails the board still
+        // renders via `board.columns`; we'll try again on next mount.
+        hydratedColumnsRef.current = null;
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [board]);
 
   const optimisticMove = useCallback(
     (ticketKey: string, _fromStatus: string, toStatus: string) => {

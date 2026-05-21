@@ -7,6 +7,7 @@ import {
 } from "./lib/columnVisibility";
 import type { JiraTicket } from "@/types";
 import type { LiveBoardDensityKey } from "@/components/live/lib/visualTokens";
+import type { QaStatusOverride } from "@/components/live/lib/statusTaxonomy";
 
 const LANE_ACCENTS = [
   "var(--accent)",
@@ -22,26 +23,29 @@ interface Props {
   laneLabel: string;
   laneIndex: number;
   tickets: JiraTicket[];
-  jiraColumns: string[];
+  /** Authoritative L→R column list (`workflowColumnOrder ?? columns`). */
+  columnOrder: string[];
   mode: "qa" | "all";
-  showEmptyNonQa: boolean;
+  showEmpty: boolean;
   density: LiveBoardDensityKey;
   collapsed: boolean;
   onToggle: () => void;
   onOpen: (key: string) => void;
+  qaStatusOverride?: QaStatusOverride;
 }
 
 export function BoardSwimlane({
   laneLabel,
   laneIndex,
   tickets,
-  jiraColumns,
+  columnOrder,
   mode,
-  showEmptyNonQa,
+  showEmpty,
   density,
   collapsed,
   onToggle,
   onOpen,
+  qaStatusOverride,
 }: Props) {
   const byStatus = useMemo(() => {
     const map: Record<string, JiraTicket[]> = {};
@@ -54,12 +58,13 @@ export function BoardSwimlane({
   const resolved: ResolvedColumn[] = useMemo(
     () =>
       resolveBoardColumns({
-        jiraColumns,
+        columnOrder,
         byStatus,
         mode,
-        showEmptyNonQa,
+        showEmpty,
+        qaStatusOverride,
       }),
-    [jiraColumns, byStatus, mode, showEmptyNonQa],
+    [columnOrder, byStatus, mode, showEmpty, qaStatusOverride],
   );
 
   const accent = LANE_ACCENTS[laneIndex % LANE_ACCENTS.length];
@@ -83,7 +88,9 @@ export function BoardSwimlane({
               onOpen={onOpen}
               density={density}
               dim={mode === "all" && col.bucket === "other"}
-              slim={mode === "qa" && col.count === 0}
+              // Any empty column renders as a slim placeholder so the
+              // full workflow grid stays stable regardless of toggle state.
+              slim={col.count === 0}
             />
           ))}
         </div>

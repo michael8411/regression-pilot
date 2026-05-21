@@ -41,7 +41,9 @@ class LiveBoardProfile(BaseModel):
 
 class LiveBoardViewPreferences(BaseModel):
     homeFilter: str = ""
-    boardColumnMode: BoardColumnMode = "qa"
+    # Layer 1 PR2: default to "all" so new boards land on the full
+    # workflow grid by default. Existing rows keep whatever they saved.
+    boardColumnMode: BoardColumnMode = "all"
     density: BoardDensity = "cozy"
     lastOpenedTicketKey: str = ""
     # Phase 13 — additive view prefs. Legacy rows without these fields

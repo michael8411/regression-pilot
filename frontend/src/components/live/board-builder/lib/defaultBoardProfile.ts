@@ -101,9 +101,12 @@ export function smartDefaultSelectedStatuses(
 }
 
 export function defaultViewPrefs(): LiveBoardViewPreferences {
+  // Layer 1 PR2: new boards default to "all" so the user lands on the
+  // full workflow grid (matches the FM 3.2.0 QA mockup). Switching to
+  // "qa" is one click in the toolbar.
   return {
     homeFilter: "",
-    boardColumnMode: "qa",
+    boardColumnMode: "all",
     density: "cozy",
     lastOpenedTicketKey: "",
     showEmptyNonQaColumns: false,

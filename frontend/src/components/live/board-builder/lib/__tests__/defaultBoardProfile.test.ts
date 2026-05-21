@@ -67,9 +67,11 @@ describe("smartDefaultSelectedStatuses", () => {
 });
 
 describe("defaultViewPrefs", () => {
-  it("ships QA mode, cozy density, no empty non-QA, no collapsed lanes", () => {
+  it("ships full-workflow mode, cozy density, no empty non-QA, no collapsed lanes", () => {
+    // Layer 1 PR2: new boards default to "all" mode so the user lands on
+    // the full workflow grid rather than a 3-column QA slice.
     const v = defaultViewPrefs();
-    expect(v.boardColumnMode).toBe("qa");
+    expect(v.boardColumnMode).toBe("all");
     expect(v.density).toBe("cozy");
     expect(v.showEmptyNonQaColumns).toBe(false);
     expect(v.collapsedLaneKeys).toEqual([]);

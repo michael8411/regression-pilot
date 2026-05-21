@@ -28,10 +28,10 @@ export function BoardPreviewMini({
   const resolvedColumns = useMemo(() => {
     if (state.kind !== "ok") return [];
     return resolveBoardColumns({
-      jiraColumns: [...selectedStatuses],
+      columnOrder: [...selectedStatuses],
       byStatus: state.response.by_status,
       mode: "qa",
-      showEmptyNonQa: false,
+      showEmpty: false,
     });
   }, [state, selectedStatuses]);
 

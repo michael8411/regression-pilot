@@ -336,7 +336,10 @@ class TestGetProjectStatuses:
         )
         out = _run(jira_service.get_project_statuses("FM"))
         names = [s["name"] for s in out]
-        assert names == sorted(names, key=str.lower)
+        # Layer 1 — Workflow Columns: first-seen order, not alphabetical.
+        # Story comes first in the fixture, so its statuses are discovered
+        # first (In Progress, Done). Bug then contributes Ready for QA.
+        assert names == ["In Progress", "Done", "Ready for QA"]
         assert names.count("In Progress") == 1
         in_progress = next(s for s in out if s["name"] == "In Progress")
         assert set(in_progress["issue_types"]) == {"Story", "Bug"}

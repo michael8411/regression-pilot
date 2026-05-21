@@ -19,6 +19,7 @@ LaneGrouping = Literal["none", "epic", "parent", "component"]
 AssigneeScope = Literal["anyone", "currentUser"]
 BoardColumnMode = Literal["all", "qa"]
 BoardDensity = Literal["compact", "cozy", "roomy"]
+BoardTemplate = Literal["workflow", "qa_release"]
 
 
 class LiveBoardProfile(BaseModel):
@@ -31,6 +32,11 @@ class LiveBoardProfile(BaseModel):
     assigneeScope: AssigneeScope = "anyone"
     refreshIntervalSec: int = Field(default=60, ge=5, le=1800)
     customJql: str = ""
+    # Layer 1 — Workflow Columns. These are additive; legacy rows omit
+    # them and deserialize cleanly via the field defaults.
+    boardTemplate: BoardTemplate = "workflow"
+    workflowColumnOrder: list[str] = Field(default_factory=list)
+    jiraBoardId: Optional[str] = None
 
 
 class LiveBoardViewPreferences(BaseModel):

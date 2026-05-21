@@ -57,6 +57,12 @@ export function defaultBoardProfile(
   // selectedStatuses + qaStatusMap are seeded from the project's real
   // workflow once `useProjectStatuses` resolves; we never pre-fill them
   // from a hardcoded list (Phase 13 §0).
+  //
+  // Layer 1 — Workflow Columns:
+  //   - boardTemplate defaults to "workflow" so new boards show the full
+  //     workflow grid rather than a 3-status QA slice.
+  //   - workflowColumnOrder is empty here; it's populated by the draft
+  //     hook once `useProjectStatuses` resolves.
   return {
     builderMode: "simple",
     projectKey: projectKey.trim(),
@@ -67,6 +73,9 @@ export function defaultBoardProfile(
     assigneeScope: "anyone",
     refreshIntervalSec: DEFAULT_REFRESH_INTERVAL_SEC,
     customJql: "",
+    boardTemplate: "workflow",
+    workflowColumnOrder: [],
+    jiraBoardId: null,
   };
 }
 

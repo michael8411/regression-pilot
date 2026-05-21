@@ -571,6 +571,17 @@ class JiraNotFoundError(RuntimeError):
 
 
 async def get_project_statuses(project_key: str) -> list[dict]:
+    """Return project statuses in **first-seen workflow order**.
+
+    Layer 1 — Workflow Columns: walks issue-type entries in API order,
+    then statuses within each type, dedup by name keeping the first
+    index. Python 3.7+ dict preserves insertion order, so callers get
+    the workflow-relative ordering Jira originally returned (rather
+    than the alphabetical sort the legacy implementation produced).
+
+    The route handler turns this list into `workflow_column_order` by
+    mapping `[s["name"] for s in result]`.
+    """
     import time
 
     now = time.monotonic()
@@ -589,6 +600,8 @@ async def get_project_statuses(project_key: str) -> list[dict]:
         resp.raise_for_status()
         raw = resp.json()
 
+    # `accumulator` is a Python 3.7+ dict, which preserves insertion order.
+    # That's what gives us the first-seen workflow ordering.
     accumulator: dict[str, dict] = {}
     for issue_type_entry in raw:
         type_name = issue_type_entry.get("name") or ""
@@ -609,7 +622,7 @@ async def get_project_statuses(project_key: str) -> list[dict]:
             elif type_name and type_name not in entry["issue_types"]:
                 entry["issue_types"].append(type_name)
 
-    ordered = sorted(accumulator.values(), key=lambda r: r["name"].lower())
+    ordered = list(accumulator.values())
     _PROJECT_STATUSES_CACHE[project_key] = (now, ordered)
     return ordered
 

@@ -93,6 +93,9 @@ async def list_project_statuses(project_key: str):
     return {
         "project_key": project_key,
         "statuses": statuses,
+        # Layer 1 — Workflow Columns: authoritative L→R order as Jira returns
+        # it (first-seen across issue types). Mirrors the order of `statuses`.
+        "workflow_column_order": [s["name"] for s in statuses],
         "fetched_at": datetime.now(timezone.utc).isoformat(),
     }
 

@@ -109,6 +109,12 @@ export interface JiraProjectStatusRow {
 export interface JiraProjectStatusesResponse {
   project_key: string;
   statuses: JiraProjectStatusRow[];
+  /**
+   * Layer 1 — Workflow Columns. Backend-supplied authoritative L→R order
+   * (first-seen, as Jira returns it). Older backends may omit this field;
+   * callers should fall back to deriving order from `statuses` if missing.
+   */
+  workflow_column_order?: string[];
   fetched_at: string;
 }
 

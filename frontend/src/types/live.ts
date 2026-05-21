@@ -101,6 +101,9 @@ export interface LiveBoardQaStatusMap {
   done: string[];
 }
 
+/** Board generation template — what shape of JQL + columns to build. */
+export type LiveBoardTemplate = "workflow" | "qa_release";
+
 export interface LiveBoardProfile {
   builderMode: LiveBoardBuilderMode;
   projectKey: string;
@@ -112,6 +115,15 @@ export interface LiveBoardProfile {
   refreshIntervalSec: number;
   /** Mirror of the customer-edited raw JQL (advanced mode). */
   customJql: string;
+  /**
+   * Layer 1 — Workflow Columns. All three are additive and optional so
+   * legacy boards saved before this layer deserialize cleanly.
+   */
+  boardTemplate?: LiveBoardTemplate;
+  /** Authoritative left→right column list, derived from Jira workflow. */
+  workflowColumnOrder?: string[];
+  /** Optional link to a Jira Agile board for column-order sync (Phase 1B). */
+  jiraBoardId?: string | null;
 }
 
 export type LiveBoardColumnMode = "all" | "qa";

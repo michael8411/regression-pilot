@@ -304,6 +304,43 @@ class TestPhase13ProjectStatusesRoute:
         assert body["project_key"] == "FM"
         assert body["statuses"][0]["name"] == "Done"
         assert body["fetched_at"]
+        # Layer 1 — Workflow Columns: response includes the L→R column order
+        # mirrored from the service layer's first-seen ordering.
+        assert body["workflow_column_order"] == ["Done", "In Progress"]
+
+    def test_workflow_column_order_preserves_service_ordering(
+        self, jira_client, monkeypatch
+    ):
+        """Order in `workflow_column_order` matches the order the service
+        returns, NOT alphabetical. This is the contract Layer 1 depends on."""
+        from services import jira_service
+
+        async def fake_get(*_a, **_k):
+            # Deliberately non-alphabetical order to prove order is preserved.
+            return [
+                {"name": "To Do", "category": "new", "issue_types": ["Story"]},
+                {
+                    "name": "In Development",
+                    "category": "indeterminate",
+                    "issue_types": ["Story"],
+                },
+                {"name": "Code Review", "category": "indeterminate", "issue_types": ["Story"]},
+                {"name": "Ready to Test", "category": "indeterminate", "issue_types": ["Story"]},
+                {"name": "In Testing", "category": "indeterminate", "issue_types": ["Story"]},
+                {"name": "Closed", "category": "done", "issue_types": ["Story"]},
+            ]
+
+        monkeypatch.setattr(jira_service, "get_project_statuses", fake_get)
+        r = jira_client.get("/jira/projects/FM/statuses")
+        assert r.status_code == 200
+        assert r.json()["workflow_column_order"] == [
+            "To Do",
+            "In Development",
+            "Code Review",
+            "Ready to Test",
+            "In Testing",
+            "Closed",
+        ]
 
     def test_unknown_project_returns_404(self, jira_client, monkeypatch):
         from services import jira_service

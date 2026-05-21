@@ -45,6 +45,7 @@ export function BoardCreateDialog({
     initial,
     defaultProjectKey,
     projectStatuses: statusesHook.statuses,
+    apiWorkflowColumnOrder: statusesHook.workflowColumnOrder,
   });
   const {
     state,
@@ -53,6 +54,7 @@ export function BoardCreateDialog({
     setName,
     setProjectKey,
     setVersionName,
+    setBoardTemplate,
     setComponents,
     setSelectedStatuses,
     setAssigneeScope,
@@ -289,6 +291,7 @@ export function BoardCreateDialog({
               projectKey={state.projectKey}
               versionName={state.versionName}
               pinned={state.pinned}
+              boardTemplate={state.boardTemplate}
               suggestedName={suggestedName}
               selectedCount={state.selectedStatuses.length}
               totalStatuses={statusesHook.statuses.length}
@@ -298,6 +301,7 @@ export function BoardCreateDialog({
               onProjectChange={onProjectChange}
               onVersionChange={setVersionName}
               onPinnedChange={setPinned}
+              onBoardTemplateChange={setBoardTemplate}
               onCustomize={onCustomize}
               onRetryStatuses={statusesHook.retry}
             />

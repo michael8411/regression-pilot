@@ -8,7 +8,8 @@ import {
   type LaneGroupingOption,
 } from "../lib/defaultBoardProfile";
 import { applyAutoQaMap } from "../lib/applyAutoQaMap";
-import { buildSimpleJql } from "../lib/buildSimpleJql";
+import { buildBoardJql } from "../lib/buildBoardJql";
+import { deriveWorkflowColumnOrder } from "../lib/deriveWorkflowColumnOrder";
 import { classifyStatus } from "@/components/live/lib/statusTaxonomy";
 import type { ProjectStatus } from "./useProjectStatuses";
 import type {
@@ -16,6 +17,7 @@ import type {
   LiveBoardAssigneeScope,
   LiveBoardProfile,
   LiveBoardQaStatusMap,
+  LiveBoardTemplate,
   LiveBoardViewPreferences,
 } from "@/types/live";
 
@@ -33,6 +35,9 @@ export interface BoardDraftState {
   customJql: boolean;
   manualJql: string;
   viewPrefs: LiveBoardViewPreferences;
+  // Layer 1 PR3 — template-aware JQL + persisted workflow column order.
+  boardTemplate: LiveBoardTemplate;
+  workflowColumnOrder: string[];
 }
 
 export interface BoardDraftPayload {
@@ -99,6 +104,13 @@ function buildInitial(
     customJql: builderMode === "advanced" || (!!initial && !profile),
     manualJql: initial?.jql ?? "",
     viewPrefs: initial?.view_prefs ?? defaultViewPrefs(),
+    // Layer 1 PR3 — default template is "workflow"; existing boards preserve
+    // whatever they saved. workflowColumnOrder is seeded from projectStatuses
+    // (see effect below) when the user hasn't already saved one.
+    boardTemplate: profile?.boardTemplate ?? defaults.boardTemplate ?? "workflow",
+    workflowColumnOrder: profile?.workflowColumnOrder
+      ? [...profile.workflowColumnOrder]
+      : [],
   };
 }
 
@@ -107,6 +119,12 @@ export interface UseBoardDraftArgs {
   defaultProjectKey?: string;
   /** Live project workflow; drives smart defaults + Auto-map. */
   projectStatuses: ReadonlyArray<ProjectStatus>;
+  /**
+   * Layer 1 PR3 — server-supplied workflow_column_order from the
+   * /jira/projects/{key}/statuses response. When present and non-empty,
+   * `deriveWorkflowColumnOrder` trusts it directly.
+   */
+  apiWorkflowColumnOrder?: ReadonlyArray<string>;
 }
 
 export interface UseBoardDraftResult {
@@ -127,6 +145,7 @@ export interface UseBoardDraftResult {
   setQaStatusMap: (next: LiveBoardQaStatusMap) => void;
   setCustomJql: (jql: string, isCustom: boolean) => void;
   setViewPrefs: (next: LiveBoardViewPreferences) => void;
+  setBoardTemplate: (next: LiveBoardTemplate) => void;
   applyAutoMap: () => {
     changedCount: number;
     unresolved: string[];
@@ -145,6 +164,7 @@ export function useBoardDraft({
   initial,
   defaultProjectKey = "FM",
   projectStatuses,
+  apiWorkflowColumnOrder,
 }: UseBoardDraftArgs): UseBoardDraftResult {
   const [state, setState] = useState<BoardDraftState>(() =>
     buildInitial(initial ?? null, defaultProjectKey),
@@ -228,6 +248,10 @@ export function useBoardDraft({
     (next: LiveBoardViewPreferences) => update({ viewPrefs: next }),
     [update],
   );
+  const setBoardTemplate = useCallback(
+    (next: LiveBoardTemplate) => update({ boardTemplate: next }, { touched: true }),
+    [update],
+  );
 
   // Seed smart defaults when statuses arrive and user hasn't touched anything.
   useEffect(() => {
@@ -253,6 +277,24 @@ export function useBoardDraft({
     );
   }, [projectStatuses, initial?.profile, state.selectedStatuses.length]);
 
+  // Layer 1 PR3 — seed workflowColumnOrder from project statuses + server
+  // hint as soon as it resolves, unless the user is editing an existing
+  // board that already has one saved.
+  useEffect(() => {
+    if (projectStatuses.length === 0) return;
+    if (state.workflowColumnOrder.length > 0) return;
+    const order = deriveWorkflowColumnOrder(
+      projectStatuses,
+      apiWorkflowColumnOrder,
+    );
+    if (order.length === 0) return;
+    setState((s) =>
+      s.workflowColumnOrder.length === 0
+        ? { ...s, workflowColumnOrder: order }
+        : s,
+    );
+  }, [projectStatuses, apiWorkflowColumnOrder, state.workflowColumnOrder.length]);
+
   // Auto-name when user hasn't manually edited the name yet.
   useEffect(() => {
     if (userTouchedNameRef.current) return;
@@ -262,21 +304,28 @@ export function useBoardDraft({
     }));
   }, [state.projectKey, state.versionName]);
 
+  // Layer 1 PR3 — template-driven JQL. The workflow template stops adding
+  // `status in (...)` so the resulting board renders the full pipeline; the
+  // qa_release template keeps the QA-slice behavior for callers who want it.
   const autoJql = useMemo(
     () =>
-      buildSimpleJql({
+      buildBoardJql({
+        template: state.boardTemplate,
         projectKey: state.projectKey,
         versionName: state.versionName,
         components: state.components,
-        selectedStatuses: state.selectedStatuses,
         assigneeScope: state.assigneeScope,
+        qaStatusMap: state.qaStatusMap,
+        qaStatusFallback: state.selectedStatuses,
       }),
     [
+      state.boardTemplate,
       state.projectKey,
       state.versionName,
       state.components,
-      state.selectedStatuses,
       state.assigneeScope,
+      state.qaStatusMap,
+      state.selectedStatuses,
     ],
   );
   const effectiveJql = state.customJql ? state.manualJql : autoJql;
@@ -307,17 +356,26 @@ export function useBoardDraft({
   }, [projectStatuses, state.selectedStatuses, state.qaStatusMap]);
 
   const buildPayload = useCallback((): BoardDraftPayload => {
-    return {
-      name: state.name.trim(),
-      jql: effectiveJql.trim(),
-      columns:
-        state.selectedStatuses.length > 0
+    // Layer 1 PR3 — `columns` mirrors `workflowColumnOrder` for back-compat
+    // with code paths that still read the legacy field. When the order
+    // hasn't loaded yet (network failed pre-create), fall back to the
+    // legacy selected-status list so we never persist an empty columns
+    // array on first save.
+    const columns =
+      state.workflowColumnOrder.length > 0
+        ? [...state.workflowColumnOrder]
+        : state.selectedStatuses.length > 0
           ? [...state.selectedStatuses]
           : [
               ...state.qaStatusMap.ready,
               ...state.qaStatusMap.testing,
               ...state.qaStatusMap.done,
-            ],
+            ];
+
+    return {
+      name: state.name.trim(),
+      jql: effectiveJql.trim(),
+      columns,
       profile: {
         builderMode: state.customJql ? "advanced" : "simple",
         projectKey: state.projectKey,
@@ -332,6 +390,8 @@ export function useBoardDraft({
         assigneeScope: state.assigneeScope,
         refreshIntervalSec: state.refreshIntervalSec,
         customJql: effectiveJql,
+        boardTemplate: state.boardTemplate,
+        workflowColumnOrder: [...state.workflowColumnOrder],
       },
       view_prefs: state.viewPrefs,
       pinned: state.pinned,
@@ -355,6 +415,7 @@ export function useBoardDraft({
     setQaStatusMap,
     setCustomJql,
     setViewPrefs,
+    setBoardTemplate,
     applyAutoMap,
     buildPayload,
   };
